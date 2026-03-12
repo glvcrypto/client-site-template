@@ -3,11 +3,12 @@ import { useAuth } from '@/contexts/auth-context'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -33,8 +34,21 @@ import {
   Loader2,
   UserPlus,
   Shield,
+  MapPin,
+  Building2,
+  Package,
+  Plug,
+  CreditCard,
+  Truck,
+  Plus,
+  Save,
+  Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useModules, useToggleModule, type ModuleKey } from '@/hooks/use-modules'
+import { useLocations, useCreateLocation, useUpdateLocation, useUpdateHours } from '@/hooks/use-locations'
+import { useSiteConfig, useUpdateConfig } from '@/hooks/use-site-config'
+import { useSocialLinks, useUpsertSocialLink } from '@/hooks/use-social-links'
 
 // ── Role Badge Colours ───────────────────────────────────────────────────────
 
@@ -43,6 +57,57 @@ const roleColours: Record<string, string> = {
   admin: 'bg-blue-100 text-blue-700',
   staff: 'bg-zinc-100 text-zinc-600',
 }
+
+// ── Module Descriptions ──────────────────────────────────────────────────────
+
+const MODULE_INFO: Record<ModuleKey, { label: string; description: string }> = {
+  ecommerce: {
+    label: 'Ecommerce',
+    description: 'Online store with cart, checkout, orders, payment processing',
+  },
+  service_booking: {
+    label: 'Service Booking',
+    description: 'Online service booking with calendar and time slots',
+  },
+  reviews: {
+    label: 'Reviews',
+    description: 'Google Reviews sync, respond from admin, auto-request after service',
+  },
+  financing: {
+    label: 'Financing',
+    description: 'Financing options page and application form',
+  },
+  blog: {
+    label: 'Blog',
+    description: 'Blog section with posts and categories',
+  },
+  ads: {
+    label: 'Ads',
+    description: 'Ad performance tracking — Google Ads, Meta, TikTok',
+  },
+}
+
+// ── Days of the Week ─────────────────────────────────────────────────────────
+
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
+
+// ── Integration Definitions ──────────────────────────────────────────────────
+
+const INTEGRATIONS = [
+  { key: 'google_analytics', label: 'Google Analytics', description: 'Website traffic and user behaviour tracking' },
+  { key: 'google_search_console', label: 'Google Search Console', description: 'Search performance and indexing status' },
+  { key: 'google_ads', label: 'Google Ads', description: 'Pay-per-click advertising campaigns' },
+  { key: 'meta_ads', label: 'Meta Ads', description: 'Facebook and Instagram advertising' },
+  { key: 'google_business_profile', label: 'Google Business Profile', description: 'Local business listing and reviews' },
+  { key: 'stripe', label: 'Stripe', description: 'Payment processing for online orders' },
+  { key: 'paypal', label: 'PayPal', description: 'Alternative payment method' },
+]
+
+// ── Social Platform Options ──────────────────────────────────────────────────
+
+const SOCIAL_PLATFORMS = [
+  'facebook', 'instagram', 'twitter', 'linkedin', 'youtube', 'tiktok', 'pinterest', 'google_business',
+]
 
 // ── Account Tab ──────────────────────────────────────────────────────────────
 
@@ -158,6 +223,472 @@ function AccountTab() {
   )
 }
 
+// ── Modules Tab (Admin Only) ─────────────────────────────────────────────────
+
+function ModulesTab() {
+  const { data: modules, isLoading } = useModules()
+  const toggleModule = useToggleModule()
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading modules...
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Enable or disable feature modules. Disabled modules hide their navigation items and routes.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {modules?.map((mod) => {
+          const info = MODULE_INFO[mod.module_key]
+          if (!info) return null
+          return (
+            <Card key={mod.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold">{info.label}</CardTitle>
+                  <Switch
+                    checked={mod.is_enabled}
+                    onCheckedChange={(checked) =>
+                      toggleModule.mutate(
+                        { key: mod.module_key, enabled: checked },
+                        {
+                          onSuccess: () =>
+                            toast.success(`${info.label} ${checked ? 'enabled' : 'disabled'}.`),
+                          onError: () => toast.error(`Failed to toggle ${info.label}.`),
+                        }
+                      )
+                    }
+                    disabled={toggleModule.isPending}
+                  />
+                </div>
+                <CardDescription className="text-xs">{info.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Locations Tab ────────────────────────────────────────────────────────────
+
+function LocationsTab() {
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
+  const { data: locations, isLoading } = useLocations()
+  const createLocation = useCreateLocation()
+  const updateLocation = useUpdateLocation()
+  const updateHours = useUpdateHours()
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<Record<string, string>>({})
+  const [editHours, setEditHours] = useState<Record<string, any>>({})
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading locations...
+      </div>
+    )
+  }
+
+  function startEditing(location: any) {
+    setEditingId(location.id)
+    setEditForm({
+      name: location.name ?? '',
+      address: location.address ?? '',
+      city: location.city ?? '',
+      province: location.province ?? '',
+      postal_code: location.postal_code ?? '',
+      phone: location.phone ?? '',
+      email: location.email ?? '',
+    })
+    // Build hours map from existing site_hours
+    const hoursMap: Record<string, any> = {}
+    for (const day of DAYS) {
+      const existing = location.site_hours?.find((h: any) => h.day_of_week === day)
+      hoursMap[day] = {
+        day_of_week: day,
+        open_time: existing?.open_time ?? '09:00',
+        close_time: existing?.close_time ?? '17:00',
+        is_closed: existing?.is_closed ?? (day === 'sunday' || day === 'saturday'),
+      }
+    }
+    setEditHours(hoursMap)
+  }
+
+  async function handleSave(locationId: string) {
+    try {
+      await updateLocation.mutateAsync({ id: locationId, ...editForm })
+      await updateHours.mutateAsync({
+        locationId,
+        hours: Object.values(editHours),
+      })
+      toast.success('Location updated.')
+      setEditingId(null)
+    } catch {
+      toast.error('Failed to update location.')
+    }
+  }
+
+  async function handleAddLocation() {
+    try {
+      await createLocation.mutateAsync({
+        name: 'New Location',
+        is_primary: false,
+        display_order: (locations?.length ?? 0) + 1,
+      })
+      toast.success('Location added.')
+    } catch {
+      toast.error('Failed to add location.')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Manage your business locations and operating hours.
+        </p>
+        {isAdmin && (
+          <Button size="sm" variant="outline" onClick={handleAddLocation} disabled={createLocation.isPending}>
+            {createLocation.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
+            Add Location
+          </Button>
+        )}
+      </div>
+
+      {locations?.map((location: any) => {
+        const isEditing = editingId === location.id
+        return (
+          <Card key={location.id}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold inline-flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  {isEditing ? editForm.name || 'Location' : location.name}
+                  {location.is_primary && (
+                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">Primary</Badge>
+                  )}
+                </CardTitle>
+                {!isEditing ? (
+                  <Button size="sm" variant="outline" onClick={() => startEditing(location)}>
+                    Edit
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave(location.id)}
+                      disabled={updateLocation.isPending || updateHours.isPending}
+                    >
+                      {(updateLocation.isPending || updateHours.isPending) && (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      )}
+                      <Save className="mr-1.5 h-3.5 w-3.5" />
+                      Save
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isEditing ? (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(['name', 'address', 'city', 'province', 'postal_code', 'phone', 'email'] as const).map((field) => (
+                      <div key={field} className="space-y-1.5">
+                        <Label className="text-xs capitalize">{field.replace('_', ' ')}</Label>
+                        <Input
+                          value={editForm[field] ?? ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, [field]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Hours Grid */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold inline-flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" /> Operating Hours
+                    </Label>
+                    <div className="space-y-2">
+                      {DAYS.map((day) => {
+                        const h = editHours[day]
+                        return (
+                          <div key={day} className="grid grid-cols-[100px_1fr_1fr_auto] items-center gap-2 text-sm">
+                            <span className="capitalize text-muted-foreground">{day}</span>
+                            <Input
+                              type="time"
+                              value={h?.open_time ?? '09:00'}
+                              disabled={h?.is_closed}
+                              onChange={(e) =>
+                                setEditHours((prev) => ({
+                                  ...prev,
+                                  [day]: { ...prev[day], open_time: e.target.value },
+                                }))
+                              }
+                              className="h-8 text-xs"
+                            />
+                            <Input
+                              type="time"
+                              value={h?.close_time ?? '17:00'}
+                              disabled={h?.is_closed}
+                              onChange={(e) =>
+                                setEditHours((prev) => ({
+                                  ...prev,
+                                  [day]: { ...prev[day], close_time: e.target.value },
+                                }))
+                              }
+                              className="h-8 text-xs"
+                            />
+                            <label className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap">
+                              <Switch
+                                checked={h?.is_closed ?? false}
+                                onCheckedChange={(checked) =>
+                                  setEditHours((prev) => ({
+                                    ...prev,
+                                    [day]: { ...prev[day], is_closed: checked },
+                                  }))
+                                }
+                              />
+                              Closed
+                            </label>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  {location.address && <p>{location.address}, {location.city} {location.province} {location.postal_code}</p>}
+                  {location.phone && <p>{location.phone}</p>}
+                  {location.email && <p>{location.email}</p>}
+                  {location.site_hours?.length > 0 && (
+                    <div className="mt-2 grid gap-1">
+                      {DAYS.map((day) => {
+                        const h = location.site_hours?.find((hr: any) => hr.day_of_week === day)
+                        return (
+                          <div key={day} className="grid grid-cols-[100px_1fr] text-xs">
+                            <span className="capitalize">{day}</span>
+                            <span>{h?.is_closed ? 'Closed' : h ? `${h.open_time} – ${h.close_time}` : '—'}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
+
+      {(!locations || locations.length === 0) && (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No locations configured yet. Add your first location to get started.
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── Business Info Tab ────────────────────────────────────────────────────────
+
+function BusinessInfoTab() {
+  const { data: config, isLoading: configLoading } = useSiteConfig()
+  const updateConfig = useUpdateConfig()
+  const { data: socialLinks, isLoading: socialLoading } = useSocialLinks()
+  const upsertSocialLink = useUpsertSocialLink()
+
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [formDirty, setFormDirty] = useState(false)
+  const [socialForm, setSocialForm] = useState<Record<string, string>>({})
+  const [socialDirty, setSocialDirty] = useState(false)
+
+  // Initialise form from config once loaded
+  const configFields = ['business_name', 'business_phone', 'business_email', 'business_address']
+  if (config && !formDirty && Object.keys(form).length === 0) {
+    const initial: Record<string, string> = {}
+    for (const key of configFields) {
+      initial[key] = config[key] ?? ''
+    }
+    // Use a microtask to avoid setting state during render
+    queueMicrotask(() => setForm(initial))
+  }
+
+  // Initialise social links once loaded
+  if (socialLinks && !socialDirty && Object.keys(socialForm).length === 0) {
+    const initial: Record<string, string> = {}
+    for (const link of socialLinks) {
+      initial[link.platform] = link.url ?? ''
+    }
+    queueMicrotask(() => setSocialForm(initial))
+  }
+
+  async function handleSaveConfig() {
+    try {
+      for (const [key, value] of Object.entries(form)) {
+        await updateConfig.mutateAsync({ key, value })
+      }
+      toast.success('Business info saved.')
+      setFormDirty(false)
+    } catch {
+      toast.error('Failed to save business info.')
+    }
+  }
+
+  async function handleSaveSocial() {
+    try {
+      for (const [platform, url] of Object.entries(socialForm)) {
+        if (url.trim()) {
+          const existing = socialLinks?.find((l: any) => l.platform === platform)
+          await upsertSocialLink.mutateAsync({
+            ...(existing ? { id: existing.id } : {}),
+            platform,
+            url: url.trim(),
+            display_order: SOCIAL_PLATFORMS.indexOf(platform),
+          })
+        }
+      }
+      toast.success('Social links saved.')
+      setSocialDirty(false)
+    } catch {
+      toast.error('Failed to save social links.')
+    }
+  }
+
+  if (configLoading || socialLoading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading business info...
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Business Details */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            Business Details
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Core business information used across the site.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {configFields.map((key) => (
+              <div key={key} className="space-y-1.5">
+                <Label className="text-xs capitalize">{key.replace('business_', '').replace('_', ' ')}</Label>
+                <Input
+                  value={form[key] ?? ''}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, [key]: e.target.value }))
+                    setFormDirty(true)
+                  }}
+                  placeholder={key.replace('business_', '').replace('_', ' ')}
+                />
+              </div>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            disabled={!formDirty || updateConfig.isPending}
+            onClick={handleSaveConfig}
+          >
+            {updateConfig.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            Save Business Info
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Social Links */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Social Links</CardTitle>
+          <CardDescription className="text-xs">
+            Links displayed in the site footer and contact pages.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {SOCIAL_PLATFORMS.map((platform) => (
+              <div key={platform} className="space-y-1.5">
+                <Label className="text-xs capitalize">{platform.replace('_', ' ')}</Label>
+                <Input
+                  value={socialForm[platform] ?? ''}
+                  onChange={(e) => {
+                    setSocialForm((prev) => ({ ...prev, [platform]: e.target.value }))
+                    setSocialDirty(true)
+                  }}
+                  placeholder={`https://${platform}.com/...`}
+                />
+              </div>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            disabled={!socialDirty || upsertSocialLink.isPending}
+            onClick={handleSaveSocial}
+          >
+            {upsertSocialLink.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            Save Social Links
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ── Integrations Tab (Admin Only) ────────────────────────────────────────────
+
+function IntegrationsTab() {
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Connect third-party services. Connection setup will be available in a future update.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {INTEGRATIONS.map((integration) => (
+          <Card key={integration.key}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold">{integration.label}</CardTitle>
+                <Badge variant="secondary" className="text-xs bg-zinc-100 text-zinc-500">
+                  Not Connected
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">{integration.description}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" variant="outline" disabled className="text-xs">
+                <Plug className="mr-1.5 h-3.5 w-3.5" />
+                Connect
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Notifications Tab ────────────────────────────────────────────────────────
 
 function NotificationsTab() {
@@ -192,19 +723,15 @@ function NotificationsTab() {
   )
 }
 
-// ── Users Tab (Owner Only) ───────────────────────────────────────────────────
+// ── Staff Tab (Owner Only) ───────────────────────────────────────────────────
 
-function UsersTab() {
+function StaffTab() {
   const { user, role } = useAuth()
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<string>('staff')
 
   function handleInvite() {
-    // NOTE: User invitation requires a Supabase edge function or admin API call.
-    // The Supabase client-side SDK does not support inviting users directly.
-    // To implement this, create a Supabase Edge Function that uses the admin API
-    // (supabase.auth.admin.inviteUserByEmail) with the service_role key.
     toast.info('Invitation feature coming soon.')
     setInviteOpen(false)
     setInviteEmail('')
@@ -273,7 +800,6 @@ function UsersTab() {
           </Dialog>
         </CardHeader>
         <CardContent>
-          {/* Current user — we can't query auth.users from the client */}
           <div className="flex items-center gap-3 rounded-md border p-3">
             <div className="rounded-full bg-zinc-100 p-2">
               <User className="h-4 w-4 text-zinc-500" />
@@ -301,32 +827,107 @@ function UsersTab() {
   )
 }
 
+// ── Payments Tab (Admin Only, Stub) ──────────────────────────────────────────
+
+function PaymentsTab() {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+          <CreditCard className="h-4 w-4" />
+          Payment Methods
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Configure payment methods and processing when ecommerce is enabled. This will be fully built in Phase 4.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Shipping & Tax Tab (Admin Only, Stub) ────────────────────────────────────
+
+function ShippingTaxTab() {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+          <Truck className="h-4 w-4" />
+          Shipping & Tax
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Configure shipping rates and tax rules when ecommerce is enabled. This will be fully built in Phase 4.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ── Settings Page ────────────────────────────────────────────────────────────
 
 export function SettingsPage() {
   const { role } = useAuth()
   const isOwner = role === 'owner' || role === 'admin'
+  const isAdmin = role === 'admin'
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
       <Tabs defaultValue={0}>
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value={0}>Account</TabsTrigger>
-          <TabsTrigger value={1}>Notifications</TabsTrigger>
-          {isOwner && <TabsTrigger value={2}>Users</TabsTrigger>}
+          <TabsTrigger value={1}>Business Info</TabsTrigger>
+          <TabsTrigger value={2}>Locations</TabsTrigger>
+          {isOwner && <TabsTrigger value={3}>Staff</TabsTrigger>}
+          {isOwner && <TabsTrigger value={4}>Notifications</TabsTrigger>}
+          {isAdmin && <TabsTrigger value={5}>Payments</TabsTrigger>}
+          {isAdmin && <TabsTrigger value={6}>Shipping & Tax</TabsTrigger>}
+          {isAdmin && <TabsTrigger value={7}>Modules</TabsTrigger>}
+          {isAdmin && <TabsTrigger value={8}>Integrations</TabsTrigger>}
         </TabsList>
 
         <TabsContent value={0}>
           <AccountTab />
         </TabsContent>
         <TabsContent value={1}>
-          <NotificationsTab />
+          <BusinessInfoTab />
+        </TabsContent>
+        <TabsContent value={2}>
+          <LocationsTab />
         </TabsContent>
         {isOwner && (
-          <TabsContent value={2}>
-            <UsersTab />
+          <TabsContent value={3}>
+            <StaffTab />
+          </TabsContent>
+        )}
+        {isOwner && (
+          <TabsContent value={4}>
+            <NotificationsTab />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value={5}>
+            <PaymentsTab />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value={6}>
+            <ShippingTaxTab />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value={7}>
+            <ModulesTab />
+          </TabsContent>
+        )}
+        {isAdmin && (
+          <TabsContent value={8}>
+            <IntegrationsTab />
           </TabsContent>
         )}
       </Tabs>
