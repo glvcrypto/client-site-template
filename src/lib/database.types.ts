@@ -510,6 +510,117 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_keywords: {
+        Row: {
+          id: string
+          keyword: string
+          position: number | null
+          previous_position: number | null
+          clicks: number | null
+          impressions: number | null
+          ctr: number | null
+          page_url: string | null
+          snapshot_date: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          keyword: string
+          position?: number | null
+          previous_position?: number | null
+          clicks?: number | null
+          impressions?: number | null
+          ctr?: number | null
+          page_url?: string | null
+          snapshot_date?: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          keyword?: string
+          position?: number | null
+          previous_position?: number | null
+          clicks?: number | null
+          impressions?: number | null
+          ctr?: number | null
+          page_url?: string | null
+          snapshot_date?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      blog_posts_performance: {
+        Row: {
+          id: string
+          title: string
+          slug: string
+          published_date: string | null
+          pageviews: number | null
+          sessions: number | null
+          avg_time_on_page: number | null
+          bounce_rate: number | null
+          top_keyword: string | null
+          top_keyword_position: number | null
+          snapshot_date: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          slug: string
+          published_date?: string | null
+          pageviews?: number | null
+          sessions?: number | null
+          avg_time_on_page?: number | null
+          bounce_rate?: number | null
+          top_keyword?: string | null
+          top_keyword_position?: number | null
+          snapshot_date?: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          slug?: string
+          published_date?: string | null
+          pageviews?: number | null
+          sessions?: number | null
+          avg_time_on_page?: number | null
+          bounce_rate?: number | null
+          top_keyword?: string | null
+          top_keyword_position?: number | null
+          snapshot_date?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      user_profiles: {
+        Row: {
+          id: string
+          full_name: string
+          role: string
+          avatar_url: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          full_name?: string
+          role?: string
+          avatar_url?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          full_name?: string
+          role?: string
+          avatar_url?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

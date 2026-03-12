@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useLeads, type LeadFilters } from '@/hooks/use-leads'
+import { useStaffMap } from '@/hooks/use-staff'
+import { useAuth } from '@/contexts/auth-context'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
 import {
   Search,
   MousePointerClick,
@@ -28,6 +31,7 @@ import {
   Share2,
   HelpCircle,
   Inbox,
+  UserCheck,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -90,6 +94,7 @@ function SkeletonRow() {
       <TableCell><div className="h-5 w-20 animate-pulse rounded-full bg-zinc-200" /></TableCell>
       <TableCell><div className="h-4 w-24 animate-pulse rounded bg-zinc-200" /></TableCell>
       <TableCell><div className="h-5 w-20 animate-pulse rounded-full bg-zinc-200" /></TableCell>
+      <TableCell><div className="h-4 w-20 animate-pulse rounded bg-zinc-200" /></TableCell>
       <TableCell><div className="h-4 w-12 animate-pulse rounded bg-zinc-200" /></TableCell>
       <TableCell><div className="h-4 w-16 animate-pulse rounded bg-zinc-200" /></TableCell>
     </TableRow>
@@ -99,9 +104,15 @@ function SkeletonRow() {
 // ── Leads Page ──────────────────────────────────────────────────────────────────
 
 export function LeadsPage() {
-  const [filters, setFilters] = useState<LeadFilters>({})
+  const { user, role } = useAuth()
+  const isStaff = role === 'staff'
+  const [filters, setFilters] = useState<LeadFilters>(
+    isStaff && user ? { assigned_to: user.id } : {}
+  )
+  const [myLeadsOnly, setMyLeadsOnly] = useState(isStaff)
   const [searchInput, setSearchInput] = useState('')
   const { data: leads, isLoading } = useLeads(filters)
+  const { staffMap } = useStaffMap()
   const navigate = useNavigate()
 
   function handleSearchChange(value: string) {
@@ -160,6 +171,24 @@ export function LeadsPage() {
           </SelectContent>
         </Select>
 
+        {user && (
+          <Button
+            variant={myLeadsOnly ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              const next = !myLeadsOnly
+              setMyLeadsOnly(next)
+              setFilters((prev) => ({
+                ...prev,
+                assigned_to: next ? user.id : undefined,
+              }))
+            }}
+          >
+            <UserCheck className="mr-1.5 h-3.5 w-3.5" />
+            My Leads
+          </Button>
+        )}
+
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -180,6 +209,7 @@ export function LeadsPage() {
               <TableHead>Type</TableHead>
               <TableHead>Source</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Assigned</TableHead>
               <TableHead>Response</TableHead>
               <TableHead>Date</TableHead>
             </TableRow>
@@ -195,7 +225,7 @@ export function LeadsPage() {
               </>
             ) : !leads || leads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={7}>
                   <div className="flex flex-col items-center justify-center py-12 text-center">
                     <Inbox className="h-10 w-10 text-muted-foreground/50" />
                     <p className="mt-3 text-sm font-medium">No leads found</p>
@@ -242,6 +272,16 @@ export function LeadsPage() {
                     >
                       {formatEnumLabel(lead.status)}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {lead.assigned_to ? (
+                      <span className="inline-flex items-center gap-1">
+                        <UserCheck className="h-3 w-3 text-muted-foreground" />
+                        {staffMap.get(lead.assigned_to)?.full_name || 'Unknown'}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">&mdash;</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm">
                     {lead.response_time_minutes != null

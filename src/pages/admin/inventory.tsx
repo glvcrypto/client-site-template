@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
-import { useInventory, useUpdateInventory, type InventoryFilters } from '@/hooks/use-inventory'
+import { useInventory, useUpdateInventory, useCreateInventory, type InventoryFilters } from '@/hooks/use-inventory'
 import { useAuth } from '@/contexts/auth-context'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,12 @@ import {
   Tag,
   Clock,
   Trash2,
+  Upload,
+  FileSpreadsheet,
+  Download,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react'
 import { differenceInDays, format } from 'date-fns'
 import { toast } from 'sonner'
@@ -413,6 +419,304 @@ function DetailDialog({
   )
 }
 
+// ── CSV Import ──────────────────────────────────────────────────────────────────
+
+interface CsvImportResult {
+  success: number
+  errors: { row: number; message: string }[]
+}
+
+const CSV_TEMPLATE_HEADERS = [
+  'unit_name', 'unit_type', 'make', 'model', 'year', 'stock_number',
+  'vin', 'price', 'cost', 'condition', 'status', 'description',
+]
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  result.push(current.trim())
+  return result
+}
+
+function downloadCsvTemplate() {
+  const header = CSV_TEMPLATE_HEADERS.join(',')
+  const example = [
+    '2024 Princecraft Vectra 21RL,pontoon,Princecraft,Vectra 21RL,2024,STK-0042,,45999.99,,new,available,"Loaded with fishing package, 115hp Mercury"',
+    'Mercury 150hp Pro XS,outboard_motor,Mercury,150 Pro XS,2024,STK-0043,,18500,,new,available,Brand new in crate',
+  ].join('\n')
+  const csv = `${header}\n${example}\n`
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'inventory-template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const VALID_UNIT_TYPES = ['boat', 'pontoon', 'outboard_motor', 'lawn_mower', 'lawn_tractor', 'zero_turn', 'snowthrower', 'chainsaw', 'trimmer', 'golf_cart', 'power_washer', 'other']
+const VALID_CONDITIONS = ['new', 'used', 'demo']
+const VALID_STATUSES = ['available', 'on_order', 'featured', 'clearance', 'sold']
+
+function CsvImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const createMutation = useCreateInventory()
+  const [importing, setImporting] = useState(false)
+  const [result, setResult] = useState<CsvImportResult | null>(null)
+  const [preview, setPreview] = useState<Record<string, string>[] | null>(null)
+  const [rawRows, setRawRows] = useState<string[][]>([])
+  const [headers, setHeaders] = useState<string[]>([])
+
+  function reset() {
+    setResult(null)
+    setPreview(null)
+    setRawRows([])
+    setHeaders([])
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setResult(null)
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target?.result as string
+      const lines = text.split(/\r?\n/).filter((l) => l.trim())
+      if (lines.length < 2) {
+        toast.error('CSV must have a header row and at least one data row')
+        return
+      }
+
+      const hdrs = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, '_'))
+      setHeaders(hdrs)
+
+      const rows = lines.slice(1).map((line) => parseCsvLine(line))
+      setRawRows(rows)
+
+      // Build preview (first 5 rows)
+      const previewData = rows.slice(0, 5).map((row) => {
+        const obj: Record<string, string> = {}
+        hdrs.forEach((h, i) => { obj[h] = row[i] ?? '' })
+        return obj
+      })
+      setPreview(previewData)
+    }
+    reader.readAsText(file)
+  }
+
+  async function handleImport() {
+    if (rawRows.length === 0) return
+    setImporting(true)
+    const errors: CsvImportResult['errors'] = []
+    let success = 0
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const row = rawRows[i]
+      const obj: Record<string, string> = {}
+      headers.forEach((h, j) => { obj[h] = row[j] ?? '' })
+
+      // Validate required fields
+      if (!obj.unit_name) {
+        errors.push({ row: i + 2, message: 'Missing unit_name' })
+        continue
+      }
+
+      const unitType = obj.unit_type || 'other'
+      if (!VALID_UNIT_TYPES.includes(unitType)) {
+        errors.push({ row: i + 2, message: `Invalid unit_type: "${unitType}"` })
+        continue
+      }
+
+      const condition = obj.condition || 'new'
+      if (!VALID_CONDITIONS.includes(condition)) {
+        errors.push({ row: i + 2, message: `Invalid condition: "${condition}"` })
+        continue
+      }
+
+      const status = obj.status || 'available'
+      if (!VALID_STATUSES.includes(status)) {
+        errors.push({ row: i + 2, message: `Invalid status: "${status}"` })
+        continue
+      }
+
+      try {
+        await createMutation.mutateAsync({
+          unit_name: obj.unit_name,
+          unit_type: unitType,
+          make: obj.make || null,
+          model: obj.model || null,
+          year: obj.year ? parseInt(obj.year, 10) : null,
+          stock_number: obj.stock_number || null,
+          vin: obj.vin || null,
+          price: obj.price ? parseFloat(obj.price) : null,
+          cost: obj.cost ? parseFloat(obj.cost) : null,
+          condition: condition as any,
+          status: status as any,
+          description: obj.description || null,
+          source: 'csv_import' as any,
+          listed_date: new Date().toISOString().split('T')[0],
+        })
+        success++
+      } catch (err) {
+        errors.push({ row: i + 2, message: err instanceof Error ? err.message : 'Insert failed' })
+      }
+    }
+
+    setResult({ success, errors })
+    setImporting(false)
+    if (success > 0) {
+      toast.success(`${success} unit${success > 1 ? 's' : ''} imported`)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!importing) { onOpenChange(v); if (!v) reset() } }}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import Inventory from CSV</DialogTitle>
+          <DialogDescription>
+            Upload a CSV file to bulk-add inventory units. Download the template to see the expected format.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Template Download */}
+          <div className="flex items-center justify-between rounded-lg border bg-zinc-50 p-3">
+            <div className="flex items-center gap-2 text-sm">
+              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+              <span>Need the right format?</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={downloadCsvTemplate}>
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Download Template
+            </Button>
+          </div>
+
+          {/* File Input */}
+          <div
+            className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 p-6 cursor-pointer hover:border-zinc-400 hover:bg-zinc-100 transition-colors"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload className="h-8 w-8 text-zinc-400" />
+            <p className="mt-2 text-sm font-medium">
+              {preview ? `${rawRows.length} rows loaded` : 'Click to select CSV file'}
+            </p>
+            <p className="text-xs text-muted-foreground">CSV files only</p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+
+          {/* Preview Table */}
+          {preview && preview.length > 0 && !result && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Preview (first {preview.length} of {rawRows.length} rows)</p>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-zinc-50 border-b">
+                      {headers.slice(0, 7).map((h) => (
+                        <th key={h} className="px-2 py-1.5 text-left font-medium text-muted-foreground whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                      {headers.length > 7 && <th className="px-2 py-1.5 text-muted-foreground">...</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.map((row, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        {headers.slice(0, 7).map((h) => (
+                          <td key={h} className="px-2 py-1.5 max-w-[150px] truncate whitespace-nowrap">
+                            {row[h] || <span className="text-muted-foreground">--</span>}
+                          </td>
+                        ))}
+                        {headers.length > 7 && <td className="px-2 py-1.5 text-muted-foreground">...</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Columns detected: {headers.join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Results */}
+          {result && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <span className="text-sm font-medium">{result.success} unit{result.success !== 1 ? 's' : ''} imported successfully</span>
+              </div>
+              {result.errors.length > 0 && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 space-y-1">
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-red-700">
+                    <AlertCircle className="h-4 w-4" />
+                    {result.errors.length} row{result.errors.length !== 1 ? 's' : ''} failed
+                  </div>
+                  <div className="max-h-[120px] overflow-y-auto space-y-0.5">
+                    {result.errors.map((err, i) => (
+                      <p key={i} className="text-xs text-red-600">
+                        Row {err.row}: {err.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          {!result ? (
+            <>
+              <Button variant="outline" onClick={() => { onOpenChange(false); reset() }} disabled={importing}>
+                Cancel
+              </Button>
+              <Button onClick={handleImport} disabled={!preview || importing}>
+                {importing ? (
+                  <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />Importing...</>
+                ) : (
+                  <><Upload className="mr-1.5 h-4 w-4" />Import {rawRows.length} Units</>
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button onClick={() => { onOpenChange(false); reset() }}>
+              Done
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ── Inventory Page ───────────────────────────────────────────────────────────────
 
 export function InventoryPage() {
@@ -425,6 +729,7 @@ export function InventoryPage() {
 
   const [selectedUnit, setSelectedUnit] = useState<InventoryUnit | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
 
   function handleSearchChange(value: string) {
     setSearchInput(value)
@@ -453,12 +758,18 @@ export function InventoryPage() {
             Manage your units, track status, and monitor lot performance.
           </p>
         </div>
-        <Link to="/admin/inventory/new">
-          <Button>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Unit
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCsvImportOpen(true)}>
+            <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+            Import CSV
           </Button>
-        </Link>
+          <Link to="/admin/inventory/new">
+            <Button>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Unit
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -582,6 +893,9 @@ export function InventoryPage() {
         onOpenChange={setDialogOpen}
         isOwner={isOwner}
       />
+
+      {/* CSV Import Dialog */}
+      <CsvImportDialog open={csvImportOpen} onOpenChange={setCsvImportOpen} />
     </div>
   )
 }

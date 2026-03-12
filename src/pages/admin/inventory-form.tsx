@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useCreateInventory } from '@/hooks/use-inventory'
+import { useImageUpload } from '@/hooks/use-image-upload'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Plus, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, X, Loader2, Upload, ImageIcon, GripVertical, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ── Constants ────────────────────────────────────────────────────────────────────
@@ -87,8 +88,10 @@ export function InventoryFormPage() {
   const [status, setStatus] = useState('available')
   const [description, setDescription] = useState('')
   const [source, setSource] = useState('manual')
-  const [imageUrls, setImageUrls] = useState('')
+  const [uploadedImages, setUploadedImages] = useState<string[]>([])
   const [specs, setSpecs] = useState<SpecRow[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { uploadImages, deleteImage, uploading, progress } = useImageUpload()
 
   function addSpec() {
     setSpecs((prev) => [...prev, { key: '', value: '' }])
@@ -102,12 +105,40 @@ export function InventoryFormPage() {
     setSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: val } : s)))
   }
 
-  // Parse image URLs from textarea
-  function getImageArray(): string[] {
-    return imageUrls
-      .split('\n')
-      .map((url) => url.trim())
-      .filter((url) => url.length > 0)
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const validFiles = Array.from(files).filter((f) => {
+      if (f.size > 10 * 1024 * 1024) {
+        toast.error(`${f.name} exceeds 10MB limit`)
+        return false
+      }
+      return true
+    })
+
+    if (validFiles.length === 0) return
+
+    try {
+      const urls = await uploadImages(validFiles)
+      setUploadedImages((prev) => [...prev, ...urls])
+      toast.success(`${urls.length} image${urls.length > 1 ? 's' : ''} uploaded`)
+    } catch {
+      toast.error('Failed to upload images')
+    }
+
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function handleRemoveImage(url: string) {
+    try {
+      await deleteImage(url)
+      setUploadedImages((prev) => prev.filter((u) => u !== url))
+    } catch {
+      // Still remove from UI even if storage delete fails
+      setUploadedImages((prev) => prev.filter((u) => u !== url))
+    }
   }
 
   // Build specs object
@@ -133,7 +164,6 @@ export function InventoryFormPage() {
       return
     }
 
-    const images = getImageArray()
     const specsObj = getSpecsObject()
 
     try {
@@ -151,7 +181,7 @@ export function InventoryFormPage() {
         status: status as 'available' | 'on_order' | 'featured' | 'clearance',
         description: description.trim() || null,
         source: source as 'manual' | 'lightspeed' | 'csv_import',
-        images: images.length > 0 ? images : null,
+        images: uploadedImages.length > 0 ? uploadedImages : null,
         specs: specsObj,
         listed_date: new Date().toISOString().split('T')[0],
       })
@@ -161,8 +191,6 @@ export function InventoryFormPage() {
       toast.error('Failed to add unit. Please try again.')
     }
   }
-
-  const imagePreviews = getImageArray()
 
   return (
     <div className="space-y-4 max-w-3xl">
@@ -408,40 +436,91 @@ export function InventoryFormPage() {
           <CardHeader>
             <CardTitle className="text-base">Images</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea
-              placeholder="Paste image URLs, one per line"
-              rows={3}
-              value={imageUrls}
-              onChange={(e) => setImageUrls(e.target.value)}
-            />
-            {imagePreviews.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {imagePreviews.map((url, i) => (
-                  <div key={i} className="relative h-20 w-28 rounded-md border overflow-hidden bg-zinc-100">
+          <CardContent className="space-y-4">
+            {/* Upload area */}
+            <div
+              className="relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 p-6 transition-colors hover:border-zinc-400 hover:bg-zinc-100 cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary', 'bg-primary/5') }}
+              onDragLeave={(e) => { e.currentTarget.classList.remove('border-primary', 'bg-primary/5') }}
+              onDrop={(e) => {
+                e.preventDefault()
+                e.currentTarget.classList.remove('border-primary', 'bg-primary/5')
+                const files = e.dataTransfer.files
+                if (files.length > 0 && fileInputRef.current) {
+                  const dt = new DataTransfer()
+                  Array.from(files).forEach((f) => dt.items.add(f))
+                  fileInputRef.current.files = dt.files
+                  fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }))
+                }
+              }}
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="mt-2 text-sm font-medium">Uploading... {progress}%</p>
+                  <div className="mt-2 h-1.5 w-48 rounded-full bg-zinc-200 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-8 w-8 text-zinc-400" />
+                  <p className="mt-2 text-sm font-medium">Click to upload or drag and drop</p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG, WebP, or GIF (max 10MB each)</p>
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            {/* Uploaded images grid */}
+            {uploadedImages.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {uploadedImages.map((url, i) => (
+                  <div key={url} className="group relative aspect-[4/3] rounded-lg border overflow-hidden bg-zinc-100">
                     <img
                       src={url}
-                      alt={`Preview ${i + 1}`}
+                      alt={`Image ${i + 1}`}
                       className="h-full w-full object-cover"
-                      onError={(e) => {
-                        const target = e.currentTarget
-                        target.style.display = 'none'
-                        target.parentElement?.classList.add('flex', 'items-center', 'justify-center')
-                      }}
                     />
+                    {i === 0 && (
+                      <span className="absolute top-1.5 left-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        Cover
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(url)}
+                      className="absolute top-1.5 right-1.5 rounded-full bg-red-500 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
-              Paste direct image URLs. Proper file upload coming soon.
-            </p>
+
+            {uploadedImages.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {uploadedImages.length} image{uploadedImages.length !== 1 ? 's' : ''} uploaded. First image is the cover photo.
+              </p>
+            )}
           </CardContent>
         </Card>
 
         {/* Submit */}
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={createMutation.isPending}>
+          <Button type="submit" disabled={createMutation.isPending || uploading}>
             {createMutation.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Add Unit
           </Button>

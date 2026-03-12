@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { useLead, useUpdateLead } from '@/hooks/use-leads'
+import { useStaff } from '@/hooks/use-staff'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/auth-context'
@@ -10,6 +11,13 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   ArrowLeft,
   Phone,
@@ -98,6 +106,7 @@ export function LeadDetailPage() {
   const { data: lead, isLoading, error } = useLead(leadId)
   const updateLead = useUpdateLead()
   const { data: activityData, isLoading: activityLoading } = useLeadActivity(leadId)
+  const { data: staff } = useStaff()
 
   const [noteText, setNoteText] = useState('')
   const [isAddingNote, setIsAddingNote] = useState(false)
@@ -321,18 +330,27 @@ export function LeadDetailPage() {
                   : '--'}
               </span>
             </div>
-            <div className="grid grid-cols-[120px_1fr] items-start gap-2">
+            <div className="grid grid-cols-[120px_1fr] items-center gap-2">
               <span className="text-muted-foreground">Assigned To</span>
-              <span className="inline-flex items-center gap-1">
-                <User className="h-3.5 w-3.5 shrink-0" />
-                {lead.assigned_to ? (
-                  <code className="text-xs bg-zinc-100 px-1.5 py-0.5 rounded">
-                    {lead.assigned_to}
-                  </code>
-                ) : (
-                  <span className="text-muted-foreground">Unassigned</span>
-                )}
-              </span>
+              <Select
+                value={lead.assigned_to ?? ''}
+                onValueChange={(val) => {
+                  const assignee = (val ?? '') || null
+                  updateLead.mutate({ id: lead!.id, assigned_to: assignee })
+                }}
+              >
+                <SelectTrigger className="h-8 w-[200px]">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Unassigned</SelectItem>
+                  {staff?.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.full_name || member.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {lead.message && (
