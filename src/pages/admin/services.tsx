@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useServices, useCreateService, useUpdateService } from '@/hooks/use-services'
+import {
+  useServiceBookings,
+  useUpdateBooking,
+  type BookingStatus,
+} from '@/hooks/use-service-bookings'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +26,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Wrench,
   Plus,
@@ -30,10 +44,15 @@ import {
   User,
   ChevronRight,
   ChevronDown,
+  Check,
+  X,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
+
+import { ServiceCataloguePage } from './service-catalogue'
+import { ServiceAvailabilityPage } from './service-availability'
 
 // ── Types ────────────────────────────────────────────────────────────────────────
 
@@ -79,10 +98,24 @@ function nextStatuses(current: ServiceStatus): ServiceStatus[] {
   return STATUS_ORDER.slice(idx + 1)
 }
 
+const BOOKING_STATUS_COLOURS: Record<BookingStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+  completed: 'bg-blue-100 text-blue-800',
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
 function formatEnumLabel(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function formatTime(time: string): string {
+  const [h, m] = time.split(':').map(Number)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 || 12
+  return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`
 }
 
 // ── Service Card ─────────────────────────────────────────────────────────────────
@@ -355,9 +388,9 @@ function CollapsibleColumn({
   )
 }
 
-// ── Main Page ────────────────────────────────────────────────────────────────────
+// ── Requests Tab (Kanban) ────────────────────────────────────────────────────────
 
-export function ServicesAdminPage() {
+function RequestsTab() {
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [addOpen, setAddOpen] = useState(false)
 
@@ -388,21 +421,11 @@ export function ServicesAdminPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Services
-            {!isLoading && (
-              <span className="ml-2 text-base font-normal text-muted-foreground">
-                ({totalCount})
-              </span>
-            )}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Track service requests through the pipeline.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Track service requests through the pipeline.
+          {!isLoading && ` (${totalCount})`}
+        </p>
         <div className="flex items-center gap-3">
           <Select
             value={typeFilter}
@@ -425,13 +448,11 @@ export function ServicesAdminPage() {
         </div>
       </div>
 
-      {/* Loading */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : totalCount === 0 && !typeFilter ? (
-        /* Empty state */
         <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-16 text-center">
           <Inbox className="h-12 w-12 text-muted-foreground/50" />
           <p className="mt-3 text-sm font-medium">No services yet</p>
@@ -455,7 +476,7 @@ export function ServicesAdminPage() {
                     {grouped[col.status].length}
                   </Badge>
                 </div>
-                <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-280px)]">
+                <div className="p-2 space-y-2 flex-1 overflow-y-auto max-h-[calc(100vh-340px)]">
                   {grouped[col.status].length === 0 ? (
                     <p className="text-xs text-muted-foreground text-center py-6">No services</p>
                   ) : (
@@ -483,6 +504,176 @@ export function ServicesAdminPage() {
       )}
 
       <AddServiceDialog open={addOpen} onOpenChange={setAddOpen} />
+    </div>
+  )
+}
+
+// ── Bookings Tab ─────────────────────────────────────────────────────────────────
+
+function BookingsTab() {
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | ''>('')
+  const updateBooking = useUpdateBooking()
+
+  const { data: bookings, isLoading } = useServiceBookings(
+    statusFilter ? { status: statusFilter } : {}
+  )
+
+  async function handleStatusChange(id: string, status: BookingStatus) {
+    try {
+      const updates: Record<string, any> = { id, status }
+      if (status === 'confirmed') {
+        // Auto-set confirmed date/time to preferred values
+        const booking = bookings?.find((b) => b.id === id)
+        if (booking) {
+          updates.confirmed_date = booking.preferred_date
+          updates.confirmed_time = booking.preferred_time_slot
+        }
+      }
+      await updateBooking.mutateAsync(updates)
+      toast.success(`Booking ${status}`)
+    } catch {
+      toast.error('Failed to update booking')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Manage online service bookings.
+        </p>
+        <Select
+          value={statusFilter}
+          onValueChange={(val) => setStatusFilter((val ?? '') as BookingStatus | '')}
+        >
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All Statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : !bookings?.length ? (
+        <div className="flex flex-col items-center justify-center rounded-lg border bg-card py-16 text-center">
+          <Calendar className="h-12 w-12 text-muted-foreground/50" />
+          <p className="mt-3 text-sm font-medium">No bookings yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Bookings will appear here when customers book online.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[120px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {bookings.map((b) => (
+                <TableRow key={b.id}>
+                  <TableCell>
+                    <div>
+                      <p className="font-medium">{b.customer_name}</p>
+                      <p className="text-xs text-muted-foreground">{b.email}</p>
+                    </div>
+                  </TableCell>
+                  <TableCell>{b.service_catalogue?.name ?? '—'}</TableCell>
+                  <TableCell>{format(new Date(b.preferred_date), 'MMM d, yyyy')}</TableCell>
+                  <TableCell>{formatTime(b.preferred_time_slot)}</TableCell>
+                  <TableCell>
+                    <Badge className={cn('text-xs', BOOKING_STATUS_COLOURS[b.status as BookingStatus])}>
+                      {b.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {b.status === 'pending' && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-green-600"
+                          onClick={() => handleStatusChange(b.id, 'confirmed')}
+                          disabled={updateBooking.isPending}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600"
+                          onClick={() => handleStatusChange(b.id, 'cancelled')}
+                          disabled={updateBooking.isPending}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                    {b.status === 'confirmed' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => handleStatusChange(b.id, 'completed')}
+                        disabled={updateBooking.isPending}
+                      >
+                        Complete
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ────────────────────────────────────────────────────────────────────
+
+export function ServicesAdminPage() {
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-bold tracking-tight">Services</h1>
+
+      <Tabs defaultValue={0}>
+        <TabsList>
+          <TabsTrigger value={0}>Requests</TabsTrigger>
+          <TabsTrigger value={1}>Bookings</TabsTrigger>
+          <TabsTrigger value={2}>Catalogue</TabsTrigger>
+          <TabsTrigger value={3}>Availability</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={0}>
+          <RequestsTab />
+        </TabsContent>
+        <TabsContent value={1}>
+          <BookingsTab />
+        </TabsContent>
+        <TabsContent value={2}>
+          <ServiceCataloguePage />
+        </TabsContent>
+        <TabsContent value={3}>
+          <ServiceAvailabilityPage />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
