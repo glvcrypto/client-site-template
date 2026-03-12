@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -827,43 +827,495 @@ function StaffTab() {
   )
 }
 
-// ── Payments Tab (Admin Only, Stub) ──────────────────────────────────────────
+// ── Payments Tab (Admin Only) ─────────────────────────────────────────────────
 
 function PaymentsTab() {
+  const [configs, setConfigs] = useState<Record<string, any>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  // Load payment configs
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase.from('store_payment_config').select('*')
+      if (data) {
+        const map: Record<string, any> = {}
+        for (const row of data) map[row.provider] = row
+        setConfigs(map)
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function toggleProvider(provider: string, enabled: boolean) {
+    const row = configs[provider]
+    if (!row) return
+    const { error } = await supabase
+      .from('store_payment_config')
+      .update({ is_enabled: enabled })
+      .eq('id', row.id)
+    if (error) { toast.error('Failed to toggle.'); return }
+    setConfigs((prev) => ({ ...prev, [provider]: { ...prev[provider], is_enabled: enabled } }))
+    toast.success(`${provider === 'in_store' ? 'In-Store' : provider.charAt(0).toUpperCase() + provider.slice(1)} ${enabled ? 'enabled' : 'disabled'}.`)
+  }
+
+  async function saveConfig(provider: string, configJson: Record<string, unknown>) {
+    setSaving(true)
+    const row = configs[provider]
+    if (!row) { setSaving(false); return }
+    const { error } = await supabase
+      .from('store_payment_config')
+      .update({ config_json: configJson })
+      .eq('id', row.id)
+    setSaving(false)
+    if (error) { toast.error('Failed to save.'); return }
+    setConfigs((prev) => ({ ...prev, [provider]: { ...prev[provider], config_json: configJson } }))
+    toast.success('Configuration saved.')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading payment config...
+      </div>
+    )
+  }
+
+  const stripeConfig = configs.stripe?.config_json ?? {}
+  const paypalConfig = configs.paypal?.config_json ?? {}
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
-          <CreditCard className="h-4 w-4" />
-          Payment Methods
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Configure payment methods and processing when ecommerce is enabled. This will be fully built in Phase 4.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Configure payment providers for the online store.
+      </p>
+
+      {/* Stripe */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Stripe</CardTitle>
+            <Switch
+              checked={configs.stripe?.is_enabled ?? false}
+              onCheckedChange={(c) => toggleProvider('stripe', c)}
+            />
+          </div>
+          <CardDescription className="text-xs">Accept credit and debit cards online.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Publishable Key</Label>
+            <Input
+              value={stripeConfig.publishable_key ?? ''}
+              onChange={(e) => setConfigs((prev) => ({
+                ...prev,
+                stripe: { ...prev.stripe, config_json: { ...stripeConfig, publishable_key: e.target.value } },
+              }))}
+              placeholder="pk_live_..."
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Secret Key</Label>
+            <Input
+              type="password"
+              value={stripeConfig.secret_key ?? ''}
+              onChange={(e) => setConfigs((prev) => ({
+                ...prev,
+                stripe: { ...prev.stripe, config_json: { ...stripeConfig, secret_key: e.target.value } },
+              }))}
+              placeholder="sk_live_..."
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Webhook Secret</Label>
+            <Input
+              type="password"
+              value={stripeConfig.webhook_secret ?? ''}
+              onChange={(e) => setConfigs((prev) => ({
+                ...prev,
+                stripe: { ...prev.stripe, config_json: { ...stripeConfig, webhook_secret: e.target.value } },
+              }))}
+              placeholder="whsec_..."
+            />
+          </div>
+          <Button
+            size="sm"
+            disabled={saving}
+            onClick={() => saveConfig('stripe', configs.stripe?.config_json ?? {})}
+          >
+            {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            Save Stripe Config
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* PayPal */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">PayPal</CardTitle>
+            <Switch
+              checked={configs.paypal?.is_enabled ?? false}
+              onCheckedChange={(c) => toggleProvider('paypal', c)}
+            />
+          </div>
+          <CardDescription className="text-xs">Accept PayPal payments.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Client ID</Label>
+            <Input
+              value={paypalConfig.client_id ?? ''}
+              onChange={(e) => setConfigs((prev) => ({
+                ...prev,
+                paypal: { ...prev.paypal, config_json: { ...paypalConfig, client_id: e.target.value } },
+              }))}
+              placeholder="PayPal Client ID"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Mode</Label>
+            <Select
+              value={paypalConfig.mode ?? 'sandbox'}
+              onValueChange={(val) => setConfigs((prev) => ({
+                ...prev,
+                paypal: { ...prev.paypal, config_json: { ...paypalConfig, mode: val } },
+              }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sandbox">Sandbox</SelectItem>
+                <SelectItem value="live">Live</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            size="sm"
+            disabled={saving}
+            onClick={() => saveConfig('paypal', configs.paypal?.config_json ?? {})}
+          >
+            {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            Save PayPal Config
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* In-Store */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">In-Store Payment</CardTitle>
+            <Switch
+              checked={configs.in_store?.is_enabled ?? false}
+              onCheckedChange={(c) => toggleProvider('in_store', c)}
+            />
+          </div>
+          <CardDescription className="text-xs">
+            Allow customers to pay in-store at pickup. No online payment processing required.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </div>
   )
 }
 
-// ── Shipping & Tax Tab (Admin Only, Stub) ────────────────────────────────────
+// ── Shipping & Tax Tab (Admin Only) ──────────────────────────────────────────
 
 function ShippingTaxTab() {
+  const [shippingMethods, setShippingMethods] = useState<any[]>([])
+  const [taxConfigs, setTaxConfigs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Shipping form
+  const [shipDialogOpen, setShipDialogOpen] = useState(false)
+  const [editingShipId, setEditingShipId] = useState<string | null>(null)
+  const [shipForm, setShipForm] = useState({ name: '', type: 'flat_rate', rate: '', min_order_for_free: '', is_enabled: false })
+
+  // Tax form
+  const [taxDialogOpen, setTaxDialogOpen] = useState(false)
+  const [editingTaxId, setEditingTaxId] = useState<string | null>(null)
+  const [taxForm, setTaxForm] = useState({ region: '', province_code: '', rate_percent: '', charge_on_shipping: true, is_enabled: true })
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: ships }, { data: taxes }] = await Promise.all([
+        supabase.from('store_shipping_methods').select('*').order('display_order'),
+        supabase.from('store_tax_config').select('*').order('province_code'),
+      ])
+      if (ships) setShippingMethods(ships)
+      if (taxes) setTaxConfigs(taxes)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  // ── Shipping CRUD ──
+  function openAddShipping() {
+    setEditingShipId(null)
+    setShipForm({ name: '', type: 'flat_rate', rate: '', min_order_for_free: '', is_enabled: false })
+    setShipDialogOpen(true)
+  }
+
+  function openEditShipping(s: any) {
+    setEditingShipId(s.id)
+    setShipForm({
+      name: s.name ?? '',
+      type: s.type ?? 'flat_rate',
+      rate: s.rate?.toString() ?? '',
+      min_order_for_free: s.min_order_for_free?.toString() ?? '',
+      is_enabled: s.is_enabled ?? false,
+    })
+    setShipDialogOpen(true)
+  }
+
+  async function saveShipping() {
+    if (!shipForm.name.trim()) { toast.error('Name is required.'); return }
+    const payload = {
+      name: shipForm.name.trim(),
+      type: shipForm.type,
+      rate: shipForm.rate ? parseFloat(shipForm.rate) : 0,
+      min_order_for_free: shipForm.min_order_for_free ? parseFloat(shipForm.min_order_for_free) : null,
+      is_enabled: shipForm.is_enabled,
+    }
+    if (editingShipId) {
+      const { error } = await supabase.from('store_shipping_methods').update(payload).eq('id', editingShipId)
+      if (error) { toast.error('Failed to update.'); return }
+      setShippingMethods((prev) => prev.map((s) => s.id === editingShipId ? { ...s, ...payload } : s))
+      toast.success('Shipping method updated.')
+    } else {
+      const { data, error } = await supabase.from('store_shipping_methods').insert({ ...payload, display_order: shippingMethods.length }).select().single()
+      if (error) { toast.error('Failed to create.'); return }
+      setShippingMethods((prev) => [...prev, data])
+      toast.success('Shipping method created.')
+    }
+    setShipDialogOpen(false)
+  }
+
+  async function toggleShippingEnabled(id: string, enabled: boolean) {
+    const { error } = await supabase.from('store_shipping_methods').update({ is_enabled: enabled }).eq('id', id)
+    if (error) { toast.error('Failed to toggle.'); return }
+    setShippingMethods((prev) => prev.map((s) => s.id === id ? { ...s, is_enabled: enabled } : s))
+  }
+
+  // ── Tax CRUD ──
+  function openAddTax() {
+    setEditingTaxId(null)
+    setTaxForm({ region: '', province_code: '', rate_percent: '', charge_on_shipping: true, is_enabled: true })
+    setTaxDialogOpen(true)
+  }
+
+  function openEditTax(t: any) {
+    setEditingTaxId(t.id)
+    setTaxForm({
+      region: t.region ?? '',
+      province_code: t.province_code ?? '',
+      rate_percent: t.rate_percent?.toString() ?? '',
+      charge_on_shipping: t.charge_on_shipping ?? true,
+      is_enabled: t.is_enabled ?? true,
+    })
+    setTaxDialogOpen(true)
+  }
+
+  async function saveTax() {
+    if (!taxForm.province_code.trim()) { toast.error('Province code is required.'); return }
+    const payload = {
+      region: taxForm.region.trim() || null,
+      province_code: taxForm.province_code.trim().toUpperCase(),
+      rate_percent: taxForm.rate_percent ? parseFloat(taxForm.rate_percent) : 0,
+      charge_on_shipping: taxForm.charge_on_shipping,
+      is_enabled: taxForm.is_enabled,
+    }
+    if (editingTaxId) {
+      const { error } = await supabase.from('store_tax_config').update(payload).eq('id', editingTaxId)
+      if (error) { toast.error('Failed to update.'); return }
+      setTaxConfigs((prev) => prev.map((t) => t.id === editingTaxId ? { ...t, ...payload } : t))
+      toast.success('Tax config updated.')
+    } else {
+      const { data, error } = await supabase.from('store_tax_config').insert(payload).select().single()
+      if (error) { toast.error('Failed to create.'); return }
+      setTaxConfigs((prev) => [...prev, data])
+      toast.success('Tax config created.')
+    }
+    setTaxDialogOpen(false)
+  }
+
+  async function toggleTaxEnabled(id: string, enabled: boolean) {
+    const { error } = await supabase.from('store_tax_config').update({ is_enabled: enabled }).eq('id', id)
+    if (error) { toast.error('Failed to toggle.'); return }
+    setTaxConfigs((prev) => prev.map((t) => t.id === id ? { ...t, is_enabled: enabled } : t))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading shipping & tax config...
+      </div>
+    )
+  }
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
-          <Truck className="h-4 w-4" />
-          Shipping & Tax
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Configure shipping rates and tax rules when ecommerce is enabled. This will be fully built in Phase 4.
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* Shipping Methods */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+              <Truck className="h-4 w-4" /> Shipping Methods
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={openAddShipping}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {shippingMethods.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No shipping methods configured.</p>
+          ) : (
+            <div className="space-y-2">
+              {shippingMethods.map((s) => (
+                <div key={s.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <div>
+                    <p className="font-medium">{s.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {s.type === 'pickup' ? 'Pickup' : s.type === 'free' ? `Free over $${s.min_order_for_free ?? 0}` : `$${s.rate}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={s.is_enabled} onCheckedChange={(c) => toggleShippingEnabled(s.id, c)} />
+                    <Button variant="ghost" size="sm" onClick={() => openEditShipping(s)}>Edit</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tax Config */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+              <Package className="h-4 w-4" /> Tax Rules
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={openAddTax}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {taxConfigs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No tax rules configured.</p>
+          ) : (
+            <div className="space-y-2">
+              {taxConfigs.map((t) => (
+                <div key={t.id} className="flex items-center justify-between rounded-md border p-3 text-sm">
+                  <div>
+                    <p className="font-medium">{t.region ?? t.province_code} ({t.province_code})</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.rate_percent}% {t.charge_on_shipping ? '(incl. shipping)' : '(excl. shipping)'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={t.is_enabled} onCheckedChange={(c) => toggleTaxEnabled(t.id, c)} />
+                    <Button variant="ghost" size="sm" onClick={() => openEditTax(t)}>Edit</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Shipping Dialog */}
+      <Dialog open={shipDialogOpen} onOpenChange={setShipDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingShipId ? 'Edit Shipping Method' : 'Add Shipping Method'}</DialogTitle>
+            <DialogDescription>Configure a shipping option for customers.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">Name</Label>
+              <Input value={shipForm.name} onChange={(e) => setShipForm((p) => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Type</Label>
+              <Select value={shipForm.type} onValueChange={(v) => setShipForm((p) => ({ ...p, type: v ?? 'flat_rate' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="flat_rate">Flat Rate</SelectItem>
+                  <SelectItem value="weight_based">Weight Based</SelectItem>
+                  <SelectItem value="free">Free</SelectItem>
+                  <SelectItem value="pickup">Pickup</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Rate ($)</Label>
+                <Input type="number" step="0.01" value={shipForm.rate} onChange={(e) => setShipForm((p) => ({ ...p, rate: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Free Over ($)</Label>
+                <Input type="number" step="0.01" value={shipForm.min_order_for_free} onChange={(e) => setShipForm((p) => ({ ...p, min_order_for_free: e.target.value }))} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={shipForm.is_enabled} onCheckedChange={(c) => setShipForm((p) => ({ ...p, is_enabled: c }))} />
+              Enabled
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShipDialogOpen(false)}>Cancel</Button>
+            <Button onClick={saveShipping}>{editingShipId ? 'Update' : 'Create'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tax Dialog */}
+      <Dialog open={taxDialogOpen} onOpenChange={setTaxDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingTaxId ? 'Edit Tax Rule' : 'Add Tax Rule'}</DialogTitle>
+            <DialogDescription>Configure tax rates by province.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Region</Label>
+                <Input value={taxForm.region} onChange={(e) => setTaxForm((p) => ({ ...p, region: e.target.value }))} placeholder="e.g. Ontario" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Province Code</Label>
+                <Input value={taxForm.province_code} onChange={(e) => setTaxForm((p) => ({ ...p, province_code: e.target.value }))} placeholder="e.g. ON" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Tax Rate (%)</Label>
+              <Input type="number" step="0.001" value={taxForm.rate_percent} onChange={(e) => setTaxForm((p) => ({ ...p, rate_percent: e.target.value }))} />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={taxForm.charge_on_shipping} onCheckedChange={(c) => setTaxForm((p) => ({ ...p, charge_on_shipping: c }))} />
+              Charge on Shipping
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={taxForm.is_enabled} onCheckedChange={(c) => setTaxForm((p) => ({ ...p, is_enabled: c }))} />
+              Enabled
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTaxDialogOpen(false)}>Cancel</Button>
+            <Button onClick={saveTax}>{editingTaxId ? 'Update' : 'Create'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
