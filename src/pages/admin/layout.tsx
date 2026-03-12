@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Outlet, Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useAuth } from '@/contexts/auth-context'
 import { useSiteConfig } from '@/hooks/use-site-config'
+import { useModules, type ModuleKey } from '@/hooks/use-modules'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,10 @@ import {
   Users,
   Package,
   Wrench,
+  ShoppingBag,
+  Receipt,
+  Star,
+  FileText,
   MessageSquare,
   Activity,
   BarChart3,
@@ -33,11 +38,23 @@ import {
   Loader2,
 } from 'lucide-react'
 
-const navItems = [
+interface NavItem {
+  to: string
+  label: string
+  icon: any
+  module?: ModuleKey
+  minRole?: 'admin' | 'owner' | 'staff'
+}
+
+const allNavItems: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/leads', label: 'Leads', icon: Users },
   { to: '/admin/inventory', label: 'Inventory', icon: Package },
   { to: '/admin/services', label: 'Services', icon: Wrench },
+  { to: '/admin/shop', label: 'Shop', icon: ShoppingBag, module: 'ecommerce' },
+  { to: '/admin/orders', label: 'Orders', icon: Receipt, module: 'ecommerce' },
+  { to: '/admin/reviews', label: 'Reviews', icon: Star, module: 'reviews' },
+  { to: '/admin/content', label: 'Content', icon: FileText },
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/activity', label: 'Activity', icon: Activity },
   { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
@@ -47,7 +64,7 @@ const navItems = [
 
 function getPageTitle(pathname: string): string {
   if (pathname === '/admin' || pathname === '/admin/') return 'Dashboard'
-  const match = navItems.find((item) => item.to !== '/admin' && pathname.startsWith(item.to))
+  const match = allNavItems.find((item) => item.to !== '/admin' && pathname.startsWith(item.to))
   if (match) return match.label
   if (pathname.includes('/leads/')) return 'Lead Detail'
   if (pathname.includes('/inventory/new')) return 'New Inventory'
@@ -72,9 +89,20 @@ function SignOutMenuItem() {
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { user, role, signOut } = useAuth()
   const { data: config } = useSiteConfig()
+  const { data: modules } = useModules()
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
   const businessName = config?.business_name ?? 'Client Portal'
+
+  const visibleNavItems = allNavItems.filter((item) => {
+    if (item.module) {
+      const mod = modules?.find((m) => m.module_key === item.module)
+      if (!mod?.is_enabled) return false
+    }
+    if (item.minRole === 'admin' && role !== 'admin') return false
+    if (item.minRole === 'owner' && role === 'staff') return false
+    return true
+  })
 
   return (
     <div className="flex h-full flex-col bg-zinc-950">
@@ -86,7 +114,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const active = isNavActive(pathname, item.to)
           const Icon = item.icon
           return (
