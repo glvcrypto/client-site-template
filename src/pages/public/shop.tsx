@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Package, Search, ShoppingCart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -34,10 +34,11 @@ export function ShopPage() {
   })
   const { addItem, itemCount } = useCart()
 
-  if (!ecomEnabled) {
-    navigate({ to: '/' })
-    return null
-  }
+  useEffect(() => {
+    if (!ecomEnabled) navigate({ to: '/' })
+  }, [ecomEnabled, navigate])
+
+  if (!ecomEnabled) return null
 
   // Sort client-side
   const sorted = [...(products ?? [])].sort((a, b) => {

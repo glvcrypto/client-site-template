@@ -26,7 +26,8 @@ export function useModules() {
 }
 
 export function useModuleEnabled(key: ModuleKey) {
-  const { data: modules } = useModules()
+  const { data: modules, isLoading } = useModules()
+  if (isLoading) return true // assume enabled while loading to prevent flash-redirects
   return modules?.find((m) => m.module_key === key)?.is_enabled ?? false
 }
 
