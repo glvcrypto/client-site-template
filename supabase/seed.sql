@@ -108,3 +108,74 @@ INSERT INTO portal_activity_log (entity_type, action, summary, entity_id) VALUES
   ('message',   'created',  'New thread: Website launch timeline',                   NULL),
   ('report',    'created',  'February 2026 monthly report published',                NULL)
 ON CONFLICT DO NOTHING;
+
+-- =============================================================================
+-- NEW MODULE SEED DATA (migrations 007-013)
+-- =============================================================================
+-- NOTE: site_modules, site_navigation, site_content, service_catalogue,
+-- store_payment_config, store_shipping_methods, store_tax_config,
+-- notification_config, notification_templates, review_config, and ad_config
+-- are already seeded in their respective migrations. Only supplementary
+-- data is added below.
+-- =============================================================================
+
+-- ── Site Locations ──────────────────────────────────────────────────────────
+INSERT INTO site_locations (id, name, address, city, province, postal_code, phone, email, is_primary, lat, lng, display_order) VALUES
+  ('00000000-0000-0000-0000-100000000001', 'Northern Power & Marine — Main', '123 Great Northern Rd', 'Sault Ste. Marie', 'Ontario', 'P6B 4Y8', '(705) 253-7828', 'info@northernpower.ca', true, 46.5225, -84.3383, 0)
+ON CONFLICT DO NOTHING;
+
+-- ── Site Hours ──────────────────────────────────────────────────────────────
+-- day_of_week: 0=Sunday, 1=Monday, ... 6=Saturday
+INSERT INTO site_hours (location_id, day_of_week, open_time, close_time, is_closed) VALUES
+  ('00000000-0000-0000-0000-100000000001', 0, NULL,    NULL,    true),   -- Sunday: Closed
+  ('00000000-0000-0000-0000-100000000001', 1, '08:00', '17:00', false),  -- Monday
+  ('00000000-0000-0000-0000-100000000001', 2, '08:00', '17:00', false),  -- Tuesday
+  ('00000000-0000-0000-0000-100000000001', 3, '08:00', '17:00', false),  -- Wednesday
+  ('00000000-0000-0000-0000-100000000001', 4, '08:00', '17:00', false),  -- Thursday
+  ('00000000-0000-0000-0000-100000000001', 5, '08:00', '17:00', false),  -- Friday
+  ('00000000-0000-0000-0000-100000000001', 6, '09:00', '15:00', false)   -- Saturday
+ON CONFLICT (location_id, day_of_week) DO NOTHING;
+
+-- ── Site Social Links ───────────────────────────────────────────────────────
+INSERT INTO site_social_links (platform, url, is_active, display_order) VALUES
+  ('facebook',  'https://facebook.com/NorthernPowerMarine',  true, 0),
+  ('instagram', 'https://instagram.com/northernpowermarine', true, 1),
+  ('google',    'https://g.page/northern-power-marine',      true, 2)
+ON CONFLICT DO NOTHING;
+
+-- ── Site Banners ────────────────────────────────────────────────────────────
+INSERT INTO site_banners (title, image_url, link_url, display_order, is_active, starts_at, ends_at) VALUES
+  ('Spring Sale — Up to 20% Off Select Boats',  NULL, '/inventory', 0, true, '2026-03-01T00:00:00Z', '2026-04-30T23:59:59Z'),
+  ('New Arrivals: 2024 Lawn & Garden Equipment', NULL, '/inventory', 1, true, NULL, NULL)
+ON CONFLICT DO NOTHING;
+
+-- ── Site Staff ──────────────────────────────────────────────────────────────
+INSERT INTO site_staff (full_name, role_title, department, bio, email, phone, display_order, is_active) VALUES
+  ('Mike Northern',    'Owner',            'Management',  'Founded Northern Power & Marine in 2015. Lifelong boating enthusiast and certified marine mechanic.', 'mike@northernpower.ca',    '(705) 253-7828', 0, true),
+  ('Sarah Tremblay',   'Service Manager',   'Service',     'ASE-certified technician with 12 years of experience in marine and small engine repair.',             'sarah@northernpower.ca',   '(705) 253-7829', 1, true),
+  ('James Kirkpatrick', 'Sales Associate',  'Sales',       'Helping customers find the right boat, lawn mower, or snow blower for over 5 years.',                 'james@northernpower.ca',   '(705) 253-7830', 2, true)
+ON CONFLICT DO NOTHING;
+
+-- ── Site Testimonials ───────────────────────────────────────────────────────
+INSERT INTO site_testimonials (customer_name, quote, rating, is_active, display_order) VALUES
+  ('Angela Morrison',  'Bought my chainsaw here last month. Great service and they took the time to show me proper maintenance. Highly recommend!', 5, true, 0),
+  ('Pete Harrison',    'Had my outboard winterised and the team was thorough and affordable. Will be back every season.',                          5, true, 1),
+  ('Karen Mitchell',   'Friendly staff and fair prices. They fixed my golf cart quickly and even delivered it back to me. Five stars.',             4, true, 2)
+ON CONFLICT DO NOTHING;
+
+-- ── Store Categories ────────────────────────────────────────────────────────
+INSERT INTO store_categories (id, name, slug, display_order, is_active) VALUES
+  ('00000000-0000-0000-0000-200000000001', 'Marine Parts',         'marine-parts',         0, true),
+  ('00000000-0000-0000-0000-200000000002', 'Lawn & Garden Parts',  'lawn-garden-parts',    1, true),
+  ('00000000-0000-0000-0000-200000000003', 'Accessories',          'accessories',          2, true)
+ON CONFLICT DO NOTHING;
+
+-- ── Store Products ──────────────────────────────────────────────────────────
+INSERT INTO store_products (name, sku, price, description, category_id, brand, quantity_available, is_active) VALUES
+  ('Mercury Prop — 14.5x19 3-Blade Aluminium',  'MRC-PROP-1419', 189.99, 'OEM Mercury aluminium propeller for 75-150 HP outboards. 14.5" diameter, 19" pitch.', '00000000-0000-0000-0000-200000000001', 'Mercury', 8, true),
+  ('Fuel Water Separator Kit',                   'MRC-FWS-100',   49.99,  'Universal fuel/water separator for marine engines. Includes filter, bowl, and mounting hardware.', '00000000-0000-0000-0000-200000000001', 'Mercury', 15, true),
+  ('Cub Cadet Blade Set — 42" Deck',             'CC-BLADE-42',   64.99,  'Replacement blade set for Cub Cadet 42" riding mowers. Set of 2 blades, fits XT1 and XT2 series.', '00000000-0000-0000-0000-200000000002', 'Cub Cadet', 12, true),
+  ('Oregon Chain — 20" .050 Gauge',              'OR-CHAIN-20',   34.99,  'Replacement chainsaw chain. 20" bar, .050 gauge, 3/8" pitch. Fits ECHO CS-590 and similar.', '00000000-0000-0000-0000-200000000002', 'Oregon', 20, true),
+  ('Life Jacket — Adult Universal PFD',          'ACC-PFD-ADULT', 59.99,  'Transport Canada approved Type III PFD. Adjustable straps, reflective trim, whistle included.', '00000000-0000-0000-0000-200000000003', 'Mustang Survival', 25, true),
+  ('LED Light Bar — 20" Marine Grade',           'ACC-LED-20M',  149.99,  'Waterproof LED light bar, 120W, 6000K white. Stainless steel mounting brackets included.',     '00000000-0000-0000-0000-200000000003', 'Rigid Industries', 6, true)
+ON CONFLICT DO NOTHING;
