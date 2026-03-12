@@ -100,16 +100,10 @@ const adminOrdersRoute = createRoute({ getParentRoute: () => adminRoute, path: '
 const adminOrderDetailRoute = createRoute({ getParentRoute: () => adminRoute, path: '/orders/$orderId', component: AdminOrderDetailPage })
 const adminShopPromosRoute = createRoute({ getParentRoute: () => adminRoute, path: '/shop/promos', component: AdminShopPromosPage })
 
-// Reviews (placeholder for Phase 5)
-function ReviewsPlaceholder() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <p className="text-lg font-semibold text-muted-foreground">Reviews</p>
-      <p className="mt-1 text-sm text-muted-foreground">Coming soon in Phase 5.</p>
-    </div>
-  )
-}
-const adminReviewsRoute = createRoute({ getParentRoute: () => adminRoute, path: '/reviews', component: ReviewsPlaceholder })
+// Phase 5: Reviews
+import { ReviewsAdminPage } from './pages/admin/reviews'
+
+const adminReviewsRoute = createRoute({ getParentRoute: () => adminRoute, path: '/reviews', component: ReviewsAdminPage })
 
 // ── Route Tree ───────────────────────────────────────────────────────────────
 
@@ -153,7 +147,7 @@ const routeTree = rootRoute.addChildren([
     adminOrdersRoute,
     adminOrderDetailRoute,
     adminShopPromosRoute,
-    // Phase 5: Reviews (placeholder)
+    // Phase 5: Reviews
     adminReviewsRoute,
   ]),
 ])
