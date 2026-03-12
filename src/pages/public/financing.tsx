@@ -16,9 +16,10 @@ import {
 import { PublicLayout } from '@/components/public/public-layout'
 import { useSiteConfig } from '@/hooks/use-site-config'
 import { useCreateLead } from '@/hooks/use-leads'
+import { usePageContent } from '@/hooks/use-content'
 
 const trustBadges = [
-  { icon: FileText, title: 'Easy Application', desc: 'Simple online form — no obligation, no impact on your credit score.' },
+  { icon: FileText, title: 'Easy Application', desc: 'Simple online form \u2014 no obligation, no impact on your credit score.' },
   { icon: Clock, title: 'Quick Approval', desc: 'Most applications reviewed within one business day.' },
   { icon: ThumbsUp, title: 'Competitive Rates', desc: 'We work with multiple lenders to find you the best rate available.' },
 ]
@@ -32,8 +33,17 @@ const interestOptions = [
 
 export function FinancingPage() {
   const { data: config } = useSiteConfig()
+  const { data: content } = usePageContent('financing')
   const createLead = useCreateLead()
-  const phone = config?.phone ?? '(705) 253-7828'
+  const phone = config?.business_phone ?? config?.phone ?? '(705) 253-7828'
+
+  // CMS content with fallbacks
+  const heroTitle = content?.hero_title?.value ?? 'Flexible Financing Options'
+  const heroSubtitle = content?.hero_subtitle?.value ?? 'Get the equipment you need today with payments that work for your budget.'
+  const introText = content?.intro_text?.value ??
+    'Whether you are looking at a new fishing boat, a pontoon for the family, or a commercial mower for your business, we offer financing solutions to fit every situation. Fill out the form below and our team will follow up with tailored options.'
+  const formHeading = content?.form_heading?.value ?? 'Financing Inquiry'
+  const ctaText = content?.cta_text?.value ?? 'Prefer to talk to someone directly?'
 
   const [form, setForm] = useState({
     name: '',
@@ -66,23 +76,21 @@ export function FinancingPage() {
     <PublicLayout>
       {/* Hero */}
       <section className="bg-[#1B2A4A] px-4 py-16 text-center text-white">
-        <h1 className="text-3xl font-bold md:text-4xl">Flexible Financing Options</h1>
+        <h1 className="text-3xl font-bold md:text-4xl">{heroTitle}</h1>
         <p className="mt-3 text-gray-300">
-          Get the equipment you need today with payments that work for your budget.
+          {heroSubtitle}
         </p>
       </section>
 
       <section className="mx-auto max-w-4xl px-4 py-20 lg:px-8">
         <p className="mb-10 text-center text-gray-700">
-          Whether you are looking at a new fishing boat, a pontoon for the family, or a
-          commercial mower for your business, we offer financing solutions to fit every
-          situation. Fill out the form below and our team will follow up with tailored options.
+          {introText}
         </p>
 
         {/* Form */}
         <Card className="mx-auto mb-16 max-w-xl border border-gray-200">
           <CardContent className="p-6">
-            <h2 className="mb-4 text-xl font-semibold text-[#1B2A4A]">Financing Inquiry</h2>
+            <h2 className="mb-4 text-xl font-semibold text-[#1B2A4A]">{formHeading}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label htmlFor="name">Name *</Label>
@@ -163,7 +171,7 @@ export function FinancingPage() {
 
         {/* Contact CTA */}
         <div className="mt-12 text-center">
-          <p className="mb-2 text-gray-700">Prefer to talk to someone directly?</p>
+          <p className="mb-2 text-gray-700">{ctaText}</p>
           <a
             href={`tel:${phone.replace(/[^+\d]/g, '')}`}
             className="inline-flex items-center gap-2 text-xl font-bold text-[#D4712A] transition-colors hover:text-[#b85d1f]"

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { PublicLayout } from '@/components/public/public-layout'
 import { useSiteConfig } from '@/hooks/use-site-config'
+import { usePageContent } from '@/hooks/use-content'
 
 interface ServiceItem {
   name: string
@@ -59,15 +60,22 @@ const serviceGroups: ServiceGroup[] = [
 
 export function ServicesPage() {
   const { data: config } = useSiteConfig()
-  const phone = config?.phone ?? '(705) 253-7828'
+  const { data: content } = usePageContent('services')
+
+  const phone = config?.business_phone ?? config?.phone ?? '(705) 253-7828'
+
+  // CMS content with fallbacks
+  const heroTitle = content?.hero_title?.value ?? 'Expert Service & Repairs'
+  const heroSubtitle = content?.hero_subtitle?.value ?? 'Factory-trained technicians. Fast turnaround. Fair prices.'
+  const ctaHeading = content?.cta_heading?.value ?? 'Need help? Give us a call.'
 
   return (
     <PublicLayout>
       {/* Hero */}
       <section className="bg-[#1B2A4A] px-4 py-16 text-center text-white">
-        <h1 className="text-3xl font-bold md:text-4xl">Expert Service &amp; Repairs</h1>
+        <h1 className="text-3xl font-bold md:text-4xl">{heroTitle}</h1>
         <p className="mt-3 text-gray-300">
-          Factory-trained technicians. Fast turnaround. Fair prices.
+          {heroSubtitle}
         </p>
       </section>
 
@@ -103,7 +111,7 @@ export function ServicesPage() {
       {/* CTA */}
       <section className="bg-gray-50 px-4 py-16 text-center lg:px-8">
         <div className="mx-auto max-w-2xl">
-          <h2 className="mb-4 text-2xl font-bold text-[#1B2A4A]">Need help? Give us a call.</h2>
+          <h2 className="mb-4 text-2xl font-bold text-[#1B2A4A]">{ctaHeading}</h2>
           <a
             href={`tel:${phone.replace(/[^+\d]/g, '')}`}
             className="inline-flex items-center gap-2 text-2xl font-bold text-[#D4712A] transition-colors hover:text-[#b85d1f]"

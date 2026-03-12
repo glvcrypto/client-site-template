@@ -1,21 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Phone, Menu } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useSiteConfig } from '@/hooks/use-site-config'
+import { usePublicNavigation } from '@/hooks/use-navigation'
+import { useModules } from '@/hooks/use-modules'
 
-const navLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'About', to: '/about' },
-  { label: 'Inventory', to: '/inventory' },
-  { label: 'Services', to: '/services' },
-  { label: 'Financing', to: '/financing' },
-  { label: 'Contact', to: '/contact' },
-] as const
+// Fallback nav used when CMS has no navigation_items rows
+const fallbackNavLinks = [
+  { label: 'Home', route_path: '/', module_key: null },
+  { label: 'About', route_path: '/about', module_key: null },
+  { label: 'Inventory', route_path: '/inventory', module_key: null },
+  { label: 'Services', route_path: '/services', module_key: null },
+  { label: 'Financing', route_path: '/financing', module_key: 'financing' },
+  { label: 'Contact', route_path: '/contact', module_key: null },
+]
 
 export function Header() {
   const { data: config } = useSiteConfig()
+  const { data: navItems } = usePublicNavigation()
+  const { data: modules } = useModules()
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
@@ -25,7 +30,33 @@ export function Header() {
   }, [])
 
   const businessName = config?.business_name ?? 'Dealership Name'
-  const phone = config?.phone ?? '(705) 253-7828'
+  const phone = config?.business_phone ?? config?.phone ?? '(705) 253-7828'
+
+  // Build a set of enabled module keys
+  const enabledModules = useMemo(() => {
+    const set = new Set<string>()
+    if (modules) {
+      for (const m of modules) {
+        if (m.is_enabled) set.add(m.module_key)
+      }
+    }
+    return set
+  }, [modules])
+
+  // Use CMS nav items if available, else fallback
+  const rawLinks = navItems && navItems.length > 0
+    ? navItems.map((item: any) => ({
+        label: item.label,
+        route_path: item.route_path,
+        module_key: item.module_key ?? null,
+      }))
+    : fallbackNavLinks
+
+  // Filter out module-gated items when the module is disabled
+  const visibleLinks = rawLinks.filter((link: any) => {
+    if (!link.module_key) return true
+    return enabledModules.has(link.module_key)
+  })
 
   return (
     <header
@@ -39,10 +70,10 @@ export function Header() {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-1 md:flex">
-          {navLinks.map((link) => (
+          {visibleLinks.map((link: any) => (
             <Link
-              key={link.to}
-              to={link.to}
+              key={link.route_path}
+              to={link.route_path}
               className="rounded-md px-3 py-2 text-sm font-medium text-[#1B2A4A] transition-colors hover:text-[#D4712A]"
               activeProps={{ className: 'text-[#D4712A]' }}
             >
@@ -74,12 +105,12 @@ export function Header() {
             <div className="flex flex-col gap-6 pt-8">
               <span className="text-lg font-bold text-[#1B2A4A]">{businessName}</span>
               <nav className="flex flex-col gap-1">
-                {navLinks.map((link) => (
+                {visibleLinks.map((link: any) => (
                   <SheetClose
-                    key={link.to}
+                    key={link.route_path}
                     render={
                       <Link
-                        to={link.to}
+                        to={link.route_path}
                         className="rounded-md px-3 py-2 text-base font-medium text-[#1B2A4A] transition-colors hover:bg-gray-100 hover:text-[#D4712A]"
                       >
                         {link.label}

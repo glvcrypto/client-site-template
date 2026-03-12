@@ -17,6 +17,9 @@ import {
 import { PublicLayout } from '@/components/public/public-layout'
 import { useSiteConfig } from '@/hooks/use-site-config'
 import { useCreateLead } from '@/hooks/use-leads'
+import { usePageContent } from '@/hooks/use-content'
+import { usePrimaryLocation } from '@/hooks/use-locations'
+import { useSocialLinks } from '@/hooks/use-social-links'
 
 const serviceOptions = [
   'General Inquiry',
@@ -41,15 +44,35 @@ const serviceOptions = [
   'Pick-Up & Delivery',
 ]
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function formatTime(time: string | null): string {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`
+}
+
 export function ContactPage() {
   const { data: config } = useSiteConfig()
+  const { data: content } = usePageContent('contact')
   const createLead = useCreateLead()
   const searchParams = useSearch({ strict: false }) as Record<string, string | undefined>
+  const primaryLocation = usePrimaryLocation()
+  const { data: socialLinks } = useSocialLinks()
 
   const businessName = config?.business_name ?? 'Dealership Name'
-  const address = config?.address ?? '123 Great Northern Rd, Sault Ste. Marie, ON'
-  const phone = config?.phone ?? '(705) 253-7828'
-  const email = config?.email ?? 'info@example.com'
+  const address = primaryLocation?.address
+    ? `${primaryLocation.address}, ${primaryLocation.city} ${primaryLocation.province} ${primaryLocation.postal_code}`
+    : config?.business_address ?? config?.address ?? '123 Great Northern Rd, Sault Ste. Marie, ON'
+  const phone = primaryLocation?.phone ?? config?.business_phone ?? config?.phone ?? '(705) 253-7828'
+  const email = primaryLocation?.email ?? config?.business_email ?? config?.email ?? 'info@example.com'
+
+  // CMS content with fallbacks
+  const heroTitle = content?.hero_title?.value ?? 'Contact Us'
+  const heroSubtitle = content?.hero_subtitle?.value ?? 'Questions? Ready to book a service? We would love to hear from you.'
+  const formHeading = content?.form_heading?.value ?? 'Send Us a Message'
 
   const [form, setForm] = useState({
     name: '',
@@ -85,13 +108,18 @@ export function ContactPage() {
     }
   }
 
+  // Build hours display from location data
+  const hours = primaryLocation?.site_hours as any[] | undefined
+
+  const activeSocials = socialLinks?.filter((l: any) => l.is_active && l.url) ?? []
+
   return (
     <PublicLayout>
       {/* Hero */}
       <section className="bg-[#1B2A4A] px-4 py-16 text-center text-white">
-        <h1 className="text-3xl font-bold md:text-4xl">Contact Us</h1>
+        <h1 className="text-3xl font-bold md:text-4xl">{heroTitle}</h1>
         <p className="mt-3 text-gray-300">
-          Questions? Ready to book a service? We would love to hear from you.
+          {heroSubtitle}
         </p>
       </section>
 
@@ -100,7 +128,7 @@ export function ContactPage() {
           {/* Left: Contact Form */}
           <Card className="border border-gray-200">
             <CardContent className="p-6">
-              <h2 className="mb-4 text-xl font-semibold text-[#1B2A4A]">Send Us a Message</h2>
+              <h2 className="mb-4 text-xl font-semibold text-[#1B2A4A]">{formHeading}</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="name">Name *</Label>
@@ -206,9 +234,23 @@ export function ContactPage() {
                   <div>
                     <p className="text-sm font-medium text-[#1B2A4A]">Hours</p>
                     <ul className="text-sm text-gray-600">
-                      <li>Monday - Friday: 8:30 AM - 5:30 PM</li>
-                      <li>Saturday: 9:00 AM - 3:00 PM</li>
-                      <li>Sunday: Closed</li>
+                      {hours && hours.length > 0 ? (
+                        // Display hours from location data (day_of_week 0=Sunday)
+                        [1, 2, 3, 4, 5, 6, 0].map((dayNum) => {
+                          const h = hours.find((hr: any) => hr.day_of_week === dayNum)
+                          return (
+                            <li key={dayNum}>
+                              {DAY_NAMES[dayNum]}: {h?.is_closed ? 'Closed' : h ? `${formatTime(h.open_time)} - ${formatTime(h.close_time)}` : '\u2014'}
+                            </li>
+                          )
+                        })
+                      ) : (
+                        <>
+                          <li>Monday - Friday: 8:30 AM - 5:30 PM</li>
+                          <li>Saturday: 9:00 AM - 3:00 PM</li>
+                          <li>Sunday: Closed</li>
+                        </>
+                      )}
                     </ul>
                   </div>
                 </div>
@@ -233,12 +275,28 @@ export function ContactPage() {
               </CardContent>
             </Card>
 
-            {/* Social placeholder */}
-            <div className="flex gap-4 text-sm text-gray-500">
-              <span>Facebook</span>
-              <span>Instagram</span>
-              <span>Google Business</span>
-            </div>
+            {/* Social Links */}
+            {activeSocials.length > 0 ? (
+              <div className="flex gap-4 text-sm">
+                {activeSocials.map((link: any) => (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="capitalize text-[#D4712A] transition-colors hover:text-[#b85d1f]"
+                  >
+                    {link.platform.replace('_', ' ')}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-4 text-sm text-gray-500">
+                <span>Facebook</span>
+                <span>Instagram</span>
+                <span>Google Business</span>
+              </div>
+            )}
           </div>
         </div>
       </section>
