@@ -7,7 +7,7 @@ export function useNavigation() {
     queryKey: ['navigation'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('navigation_items')
+        .from('site_navigation')
         .select('*')
         .order('display_order', { ascending: true })
       if (error) throw error
@@ -21,7 +21,7 @@ export function usePublicNavigation() {
     queryKey: ['navigation', 'public'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('navigation_items')
+        .from('site_navigation')
         .select('*')
         .eq('is_visible', true)
         .order('display_order', { ascending: true })
@@ -34,9 +34,9 @@ export function usePublicNavigation() {
 export function useUpdateNavItem() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Pick<TablesUpdate<'navigation_items'>, 'label' | 'is_visible' | 'display_order'> & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: Pick<TablesUpdate<'site_navigation'>, 'label' | 'is_visible' | 'display_order'> & { id: string }) => {
       const { data, error } = await supabase
-        .from('navigation_items')
+        .from('site_navigation')
         .update(updates)
         .eq('id', id)
         .select()

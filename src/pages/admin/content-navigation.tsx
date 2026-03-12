@@ -55,11 +55,6 @@ export function ContentNavigationPage() {
     setDirty(true)
   }
 
-  function handleOrderChange(id: string, display_order: number) {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, display_order } : item)))
-    setDirty(true)
-  }
-
   function moveItem(index: number, direction: 'up' | 'down') {
     const newItems = [...items]
     const swapIndex = direction === 'up' ? index - 1 : index + 1

@@ -87,7 +87,7 @@ export function useValidatePromoCode(code: string, orderSubtotal: number) {
       if (data.valid_to && new Date(data.valid_to) < now) {
         return { valid: false, message: 'This promo code has expired.' }
       }
-      if (data.max_uses && data.uses_count >= data.max_uses) {
+      if (data.max_uses && (data.uses_count ?? 0) >= data.max_uses) {
         return { valid: false, message: 'This promo code has reached its usage limit.' }
       }
       if (data.min_order && orderSubtotal < data.min_order) {

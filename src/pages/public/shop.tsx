@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { PublicLayout } from '@/components/public/public-layout'
-import { useProducts, useCategories, type ProductFilters } from '@/hooks/use-products'
+import { useProducts, useCategories } from '@/hooks/use-products'
 import { useModuleEnabled } from '@/hooks/use-modules'
 import { useCart } from '@/hooks/use-cart'
 import { toast } from 'sonner'

@@ -26,7 +26,6 @@ import {
   Search,
   Clock,
   Calendar,
-  User,
   Check,
   X,
   Trophy,

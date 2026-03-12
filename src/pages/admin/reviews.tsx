@@ -634,7 +634,7 @@ function RequestsTab() {
                     {req.sent_at ? format(new Date(req.sent_at), 'MMM d, yyyy') : '—'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {format(new Date(req.created_at), 'MMM d, yyyy')}
+                    {req.created_at ? format(new Date(req.created_at), 'MMM d, yyyy') : '—'}
                   </TableCell>
                 </TableRow>
               ))}

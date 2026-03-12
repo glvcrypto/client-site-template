@@ -39,7 +39,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   Area,
   AreaChart,
@@ -50,23 +49,19 @@ import {
   Loader2,
   ShieldAlert,
   Users,
-  Package,
   Wrench,
   Clock,
   Target,
   DollarSign,
   BarChart3,
   TrendingUp,
-  TrendingDown,
   Minus,
   Globe,
   Search,
   Eye,
   MousePointerClick,
-  Timer,
   ArrowUpRight,
   ArrowDownRight,
-  BookOpen,
   Hash,
   Monitor,
   Smartphone,
@@ -83,7 +78,7 @@ import {
   isWithinInterval,
   parseISO,
 } from 'date-fns'
-import type { Json } from '@/lib/database.types'
+// database types imported as needed
 
 // ── Colours ──────────────────────────────────────────────────────────────────
 
@@ -161,7 +156,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
 }
 
-const DEVICE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+const DEVICE_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   desktop: Monitor,
   mobile: Smartphone,
   tablet: Tablet,
@@ -388,7 +383,7 @@ interface OverviewProps {
   latestSnapshot: any | null
 }
 
-function OverviewTab({ leads, inventory, services, period, start, end, staffMap, latestSnapshot }: OverviewProps) {
+function OverviewTab({ leads, inventory, services, period, start, end, staffMap: _staffMap, latestSnapshot }: OverviewProps) {
   const kpis = useMemo(() => {
     const totalLeads = leads.length
     const wonLeads = leads.filter((l) => l.status === 'won').length
@@ -680,7 +675,7 @@ function WebsiteSeoTab({ snapshots, keywords, blogPosts, leadsCount }: { snapsho
           <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Traffic Sources</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
-              <PieChart><Pie data={trafficSources} cx="50%" cy="50%" outerRadius={80} dataKey="sessions" label={({ name, sessions }) => `${name} (${sessions})`}>
+              <PieChart><Pie data={trafficSources} cx="50%" cy="50%" outerRadius={80} dataKey="sessions" label={({ name, value }) => `${name} (${value})`}>
                 {trafficSources.map((e, i) => <Cell key={i} fill={e.fill} />)}
               </Pie><Tooltip /></PieChart>
             </ResponsiveContainer>
@@ -861,7 +856,7 @@ function WebsiteSeoTab({ snapshots, keywords, blogPosts, leadsCount }: { snapsho
 // TAB 2: STAFF
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function StaffTab({ allLeads, staff, staffMap }: { allLeads: any[]; staff: any[]; staffMap: Map<string, any> }) {
+function StaffTab({ allLeads, staff: _staff, staffMap }: { allLeads: any[]; staff: any[]; staffMap: Map<string, any> }) {
   const [selectedStaff, setSelectedStaff] = useState<string>('all')
 
   const staffPerformance = useMemo(() => {
@@ -1273,7 +1268,7 @@ function TrafficTab({ dateRange, period }: { dateRange: DateRange; period: Perio
           <CardContent>
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={sourcePieData} cx="50%" cy="50%" outerRadius={90} dataKey="sessions" label={({ name, sessions }) => `${name} (${sessions})`}>
+                <Pie data={sourcePieData} cx="50%" cy="50%" outerRadius={90} dataKey="sessions" label={({ name, value }) => `${name} (${value})`}>
                   {sourcePieData.map((e, i) => <Cell key={i} fill={e.fill} />)}
                 </Pie>
                 <Tooltip />

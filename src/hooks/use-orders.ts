@@ -56,7 +56,7 @@ export function useOrders(filters: OrderFilters = {}) {
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (filters.status) query = query.eq('status', filters.status)
+      if (filters.status) query = query.eq('status', filters.status as any)
       if (filters.date_from) query = query.gte('created_at', filters.date_from)
       if (filters.date_to) query = query.lte('created_at', filters.date_to)
       if (filters.search) {

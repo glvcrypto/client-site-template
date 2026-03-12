@@ -38,7 +38,6 @@ import {
   Building2,
   Package,
   Plug,
-  CreditCard,
   Truck,
   Plus,
   Save,
@@ -65,7 +64,6 @@ import {
   Globe,
   CheckCircle2,
   XCircle,
-  AlertTriangle,
   Send,
 } from 'lucide-react'
 
@@ -1164,7 +1162,7 @@ function PaymentsTab() {
     if (!row) { setSaving(false); return }
     const { error } = await supabase
       .from('store_payment_config')
-      .update({ config_json: configJson })
+      .update({ config_json: configJson as any })
       .eq('id', row.id)
     setSaving(false)
     if (error) { toast.error('Failed to save.'); return }
@@ -1381,14 +1379,14 @@ function ShippingTaxTab() {
       is_enabled: shipForm.is_enabled,
     }
     if (editingShipId) {
-      const { error } = await supabase.from('store_shipping_methods').update(payload).eq('id', editingShipId)
+      const { error } = await supabase.from('store_shipping_methods').update(payload as any).eq('id', editingShipId)
       if (error) { toast.error('Failed to update.'); return }
-      setShippingMethods((prev) => prev.map((s) => s.id === editingShipId ? { ...s, ...payload } : s))
+      setShippingMethods((prev) => prev.map((s) => s.id === editingShipId ? { ...s, ...payload } : s) as any)
       toast.success('Shipping method updated.')
     } else {
-      const { data, error } = await supabase.from('store_shipping_methods').insert({ ...payload, display_order: shippingMethods.length }).select().single()
+      const { data, error } = await supabase.from('store_shipping_methods').insert({ ...payload, display_order: shippingMethods.length } as any).select().single()
       if (error) { toast.error('Failed to create.'); return }
-      setShippingMethods((prev) => [...prev, data])
+      setShippingMethods((prev) => [...prev, data] as any)
       toast.success('Shipping method created.')
     }
     setShipDialogOpen(false)

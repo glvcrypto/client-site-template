@@ -529,7 +529,7 @@ function BookingsTab() {
           updates.confirmed_time = booking.preferred_time_slot
         }
       }
-      await updateBooking.mutateAsync(updates)
+      await updateBooking.mutateAsync(updates as any)
       toast.success(`Booking ${status}`)
     } catch {
       toast.error('Failed to update booking')

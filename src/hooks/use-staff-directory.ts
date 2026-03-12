@@ -7,7 +7,7 @@ export function useStaffDirectory() {
     queryKey: ['staff-directory'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('staff_directory')
+        .from('site_staff')
         .select('*')
         .order('display_order', { ascending: true })
       if (error) throw error
@@ -21,7 +21,7 @@ export function useActiveStaff() {
     queryKey: ['staff-directory', 'active'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('staff_directory')
+        .from('site_staff')
         .select('*')
         .eq('is_active', true)
         .order('display_order', { ascending: true })
@@ -34,8 +34,8 @@ export function useActiveStaff() {
 export function useCreateStaffMember() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (member: TablesInsert<'staff_directory'>) => {
-      const { data, error } = await supabase.from('staff_directory').insert(member).select().single()
+    mutationFn: async (member: TablesInsert<'site_staff'>) => {
+      const { data, error } = await supabase.from('site_staff').insert(member).select().single()
       if (error) throw error
       return data
     },
@@ -46,8 +46,8 @@ export function useCreateStaffMember() {
 export function useUpdateStaffMember() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...updates }: TablesUpdate<'staff_directory'> & { id: string }) => {
-      const { data, error } = await supabase.from('staff_directory').update(updates).eq('id', id).select().single()
+    mutationFn: async ({ id, ...updates }: TablesUpdate<'site_staff'> & { id: string }) => {
+      const { data, error } = await supabase.from('site_staff').update(updates).eq('id', id).select().single()
       if (error) throw error
       return data
     },
@@ -59,7 +59,7 @@ export function useDeleteStaffMember() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('staff_directory').delete().eq('id', id)
+      const { error } = await supabase.from('site_staff').delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['staff-directory'] }),

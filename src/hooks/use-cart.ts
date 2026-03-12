@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ export function useCartState(): CartContextValue {
       if (data.valid_to && new Date(data.valid_to) < now) {
         return { success: false, message: 'This promo code has expired.' }
       }
-      if (data.max_uses && data.uses_count >= data.max_uses) {
+      if (data.max_uses && (data.uses_count ?? 0) >= data.max_uses) {
         return { success: false, message: 'This promo code has reached its usage limit.' }
       }
       if (data.min_order && subtotal < data.min_order) {
@@ -166,8 +166,8 @@ export function useCartState(): CartContextValue {
 
       setPromo({
         code: data.code,
-        discount_type: data.discount_type,
-        discount_value: data.discount_value,
+        discount_type: data.discount_type as 'percentage' | 'fixed',
+        discount_value: data.discount_value ?? 0,
       })
       return { success: true, message: 'Promo code applied!' }
     },

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -10,7 +9,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Search, Inbox, Loader2, ShoppingCart } from 'lucide-react'
+import { Search, Inbox, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { useOrders, type OrderFilters } from '@/hooks/use-orders'
 

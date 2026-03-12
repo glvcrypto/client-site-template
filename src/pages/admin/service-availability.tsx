@@ -7,7 +7,7 @@ import {
 } from '@/hooks/use-service-catalogue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+// Label import removed (unused)
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -65,7 +65,7 @@ export function ServiceAvailabilityPage() {
   // Populate from existing data
   useEffect(() => {
     if (!existing) return
-    setWeek((prev) => {
+    setWeek((_prev) => {
       const fresh = defaultWeek()
       for (const row of existing) {
         const idx = fresh.findIndex((d) => d.day_of_week === row.day_of_week)
@@ -142,7 +142,7 @@ export function ServiceAvailabilityPage() {
           {locations.length > 1 && (
             <Select
               value={locationId}
-              onValueChange={setSelectedLocationId}
+              onValueChange={(val) => setSelectedLocationId(val ?? undefined)}
             >
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="Select location" />
@@ -210,7 +210,7 @@ export function ServiceAvailabilityPage() {
                 <td className="px-4 py-3">
                   <Select
                     value={String(day.slot_duration_minutes)}
-                    onValueChange={(val) => updateDay(i, { slot_duration_minutes: parseInt(val) })}
+                    onValueChange={(val) => updateDay(i, { slot_duration_minutes: parseInt(val ?? '60') })}
                     disabled={!day.is_available}
                   >
                     <SelectTrigger className="w-[120px]">

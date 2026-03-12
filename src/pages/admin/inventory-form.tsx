@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Plus, X, Loader2, Upload, ImageIcon, GripVertical, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, X, Loader2, Upload, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ── Constants ────────────────────────────────────────────────────────────────────

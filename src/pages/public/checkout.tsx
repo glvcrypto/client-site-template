@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { ArrowLeft, Loader2, CheckCircle2, ShoppingCart, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,6 @@ interface ShippingMethod {
 }
 
 export function CheckoutPage() {
-  const navigate = useNavigate()
   const { items, subtotal, promo, discountAmount, clearCart } = useCart()
   const createOrder = useCreateOrder()
 
@@ -39,10 +38,10 @@ export function CheckoutPage() {
         supabase.from('store_shipping_methods').select('*').eq('is_enabled', true).order('display_order'),
         supabase.from('store_tax_config').select('*').eq('is_enabled', true),
       ])
-      if (ships) setShippingMethods(ships)
+      if (ships) setShippingMethods(ships as any)
       if (taxes && taxes.length > 0) {
-        setTaxRate(taxes[0].rate_percent / 100)
-        setChargeOnShipping(taxes[0].charge_on_shipping)
+        setTaxRate((taxes[0].rate_percent ?? 13) / 100)
+        setChargeOnShipping(taxes[0].charge_on_shipping ?? true)
       }
     }
     load()

@@ -22,8 +22,8 @@ export function useAdPerformance(filters: AdFilters) {
         .lte('snapshot_date', filters.dateRange.to)
         .order('snapshot_date', { ascending: false })
 
-      if (filters.platform) query = query.eq('platform', filters.platform)
-      if (filters.status) query = query.eq('status', filters.status)
+      if (filters.platform) query = query.eq('platform', filters.platform as any)
+      if (filters.status) query = query.eq('status', filters.status as any)
 
       const { data, error } = await query
       if (error) throw error
@@ -168,7 +168,7 @@ export function useUpdateAdConfig() {
     mutationFn: async ({ id, ...updates }: { id: string; account_id?: string; is_enabled?: boolean; config_json?: Record<string, unknown> }) => {
       const { data, error } = await supabase
         .from('ad_config')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({ ...updates, updated_at: new Date().toISOString() } as any)
         .eq('id', id)
         .select()
         .single()

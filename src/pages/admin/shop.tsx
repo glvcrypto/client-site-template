@@ -16,7 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  Package, Plus, Search, Inbox, Loader2, Trash2, Pencil, FileSpreadsheet,
+  Plus, Search, Inbox, Loader2, Trash2, Pencil, FileSpreadsheet,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {

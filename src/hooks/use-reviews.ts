@@ -130,7 +130,7 @@ export function useSendReviewRequest() {
           customer_name: request.customer_name,
           email: request.email,
           phone: request.phone || null,
-          trigger_type: request.trigger_type || 'manual',
+          trigger_type: (request.trigger_type || 'manual') as any,
           trigger_id: request.trigger_id || null,
         })
         .select()
