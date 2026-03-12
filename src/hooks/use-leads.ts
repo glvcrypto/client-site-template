@@ -18,8 +18,8 @@ export function useLeads(filters: LeadFilters = {}) {
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (filters.status) query = query.eq('status', filters.status)
-      if (filters.source) query = query.eq('source', filters.source)
+      if (filters.status) query = query.eq('status', filters.status as any)
+      if (filters.source) query = query.eq('source', filters.source as any)
       if (filters.assigned_to) query = query.eq('assigned_to', filters.assigned_to)
       if (filters.search) query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%`)
 

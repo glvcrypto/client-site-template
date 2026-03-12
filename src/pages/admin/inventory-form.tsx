@@ -14,8 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Plus, X, Loader2, ImageIcon } from 'lucide-react'
+import { ArrowLeft, Plus, X, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 // ── Constants ────────────────────────────────────────────────────────────────────
@@ -201,7 +200,7 @@ export function InventoryFormPage() {
 
               <div>
                 <Label htmlFor="unitType">Unit Type *</Label>
-                <Select value={unitType} onValueChange={setUnitType}>
+                <Select value={unitType} onValueChange={(v) => setUnitType(v ?? '')}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -215,7 +214,7 @@ export function InventoryFormPage() {
 
               <div>
                 <Label htmlFor="make">Make</Label>
-                <Select value={make} onValueChange={setMake}>
+                <Select value={make} onValueChange={(v) => setMake(v ?? '')}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select make" />
                   </SelectTrigger>
@@ -311,7 +310,7 @@ export function InventoryFormPage() {
 
               <div>
                 <Label>Condition</Label>
-                <Select value={condition} onValueChange={setCondition}>
+                <Select value={condition} onValueChange={(v) => setCondition(v ?? 'new')}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -325,7 +324,7 @@ export function InventoryFormPage() {
 
               <div>
                 <Label>Status</Label>
-                <Select value={status} onValueChange={setStatus}>
+                <Select value={status} onValueChange={(v) => setStatus(v ?? 'available')}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -339,7 +338,7 @@ export function InventoryFormPage() {
 
               <div>
                 <Label>Source</Label>
-                <Select value={source} onValueChange={setSource}>
+                <Select value={source} onValueChange={(v) => setSource(v ?? 'manual')}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>

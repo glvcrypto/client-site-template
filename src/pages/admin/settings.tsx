@@ -248,7 +248,7 @@ function UsersTab() {
                 </div>
                 <div className="space-y-2">
                   <Label>Role</Label>
-                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <Select value={inviteRole} onValueChange={(val) => setInviteRole(val ?? 'staff')}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>

@@ -152,7 +152,7 @@ function NewThreadDialog({
             <Label htmlFor="thread_category">Category</Label>
             <Select
               value={formData.category}
-              onValueChange={(val) => setFormData((p) => ({ ...p, category: val }))}
+              onValueChange={(val) => setFormData((p) => ({ ...p, category: val ?? '' }))}
             >
               <SelectTrigger id="thread_category">
                 <SelectValue placeholder="General" />

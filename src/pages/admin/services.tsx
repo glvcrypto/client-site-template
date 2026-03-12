@@ -91,7 +91,8 @@ function ServiceCard({ service }: { service: ServiceRow }) {
   const updateService = useUpdateService()
   const available = nextStatuses((service.status ?? 'received') as ServiceStatus)
 
-  async function handleMove(newStatus: string) {
+  async function handleMove(newStatus: string | null) {
+    if (!newStatus) return
     try {
       await updateService.mutateAsync({ id: service.id, status: newStatus as ServiceStatus })
       toast.success(`Moved to ${formatEnumLabel(newStatus)}`)
@@ -220,7 +221,7 @@ function AddServiceDialog({
             <Label htmlFor="service_type">Service Type *</Label>
             <Select
               value={formData.service_type}
-              onValueChange={(val) => setFormData((p) => ({ ...p, service_type: val }))}
+              onValueChange={(val) => setFormData((p) => ({ ...p, service_type: val ?? '' }))}
             >
               <SelectTrigger id="service_type">
                 <SelectValue placeholder="Select a service type" />
@@ -405,7 +406,7 @@ export function ServicesAdminPage() {
         <div className="flex items-center gap-3">
           <Select
             value={typeFilter}
-            onValueChange={(val) => setTypeFilter(val)}
+            onValueChange={(val) => setTypeFilter(val ?? '')}
           >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="All Service Types" />

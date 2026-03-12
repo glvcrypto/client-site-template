@@ -94,7 +94,7 @@ export function UpdatesPage() {
                         variant="secondary"
                         className={cn(
                           'text-[10px] shrink-0',
-                          updateTypeColours[update.update_type] ?? ''
+                          updateTypeColours[update.update_type ?? 'note'] ?? ''
                         )}
                       >
                         {update.update_type}
@@ -122,9 +122,9 @@ export function UpdatesPage() {
           <div className="relative space-y-0">
             {allUpdates.map((update, i) => {
               const Icon =
-                updateTypeIcons[update.update_type] ?? Info
+                updateTypeIcons[update.update_type ?? 'note'] ?? Info
               const colours =
-                updateTypeColours[update.update_type] ?? 'bg-zinc-100 text-zinc-500'
+                updateTypeColours[update.update_type ?? 'note'] ?? 'bg-zinc-100 text-zinc-500'
 
               return (
                 <div key={update.id} className="flex gap-3 pb-5 last:pb-0">

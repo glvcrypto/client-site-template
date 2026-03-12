@@ -27,7 +27,6 @@ import {
   Users,
   Share2,
   HelpCircle,
-  Loader2,
   Inbox,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
@@ -125,7 +124,7 @@ export function LeadsPage() {
         <Select
           value={filters.status ?? ''}
           onValueChange={(val) =>
-            setFilters((prev) => ({ ...prev, status: val || undefined }))
+            setFilters((prev) => ({ ...prev, status: (val ?? '') || undefined }))
           }
         >
           <SelectTrigger className="w-[160px]">
@@ -145,7 +144,7 @@ export function LeadsPage() {
         <Select
           value={filters.source ?? ''}
           onValueChange={(val) =>
-            setFilters((prev) => ({ ...prev, source: val || undefined }))
+            setFilters((prev) => ({ ...prev, source: (val ?? '') || undefined }))
           }
         >
           <SelectTrigger className="w-[160px]">

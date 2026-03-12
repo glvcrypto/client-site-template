@@ -19,10 +19,10 @@ export function useInventory(filters: InventoryFilters = {}) {
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (filters.status) query = query.eq('status', filters.status)
+      if (filters.status) query = query.eq('status', filters.status as any)
       if (filters.unit_type) query = query.eq('unit_type', filters.unit_type)
       if (filters.make) query = query.eq('make', filters.make)
-      if (filters.condition) query = query.eq('condition', filters.condition)
+      if (filters.condition) query = query.eq('condition', filters.condition as any)
       if (filters.search) query = query.or(`unit_name.ilike.%${filters.search}%,stock_number.ilike.%${filters.search}%`)
 
       const { data, error } = await query
@@ -44,7 +44,7 @@ export function usePublicInventory(filters: InventoryFilters = {}) {
 
       if (filters.unit_type) query = query.eq('unit_type', filters.unit_type)
       if (filters.make) query = query.eq('make', filters.make)
-      if (filters.condition) query = query.eq('condition', filters.condition)
+      if (filters.condition) query = query.eq('condition', filters.condition as any)
       if (filters.search) query = query.or(`unit_name.ilike.%${filters.search}%`)
 
       const { data, error } = await query

@@ -113,7 +113,7 @@ export function FinancingPage() {
               </div>
               <div>
                 <Label htmlFor="interest">What are you interested in?</Label>
-                <Select value={form.interest} onValueChange={(v) => setForm((p) => ({ ...p, interest: v }))}>
+                <Select value={form.interest} onValueChange={(v) => setForm((p) => ({ ...p, interest: v ?? '' }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select..." />
                   </SelectTrigger>

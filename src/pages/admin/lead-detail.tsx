@@ -41,15 +41,6 @@ type LeadStatus = 'new' | 'contacted' | 'quoted' | 'negotiating' | 'won' | 'lost
 
 // ── Colour Maps ─────────────────────────────────────────────────────────────────
 
-const statusColours: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-700',
-  contacted: 'bg-yellow-100 text-yellow-700',
-  quoted: 'bg-purple-100 text-purple-700',
-  negotiating: 'bg-orange-100 text-orange-700',
-  won: 'bg-green-100 text-green-700',
-  lost: 'bg-red-100 text-red-700',
-}
-
 const typeColours: Record<string, string> = {
   quote_request: 'bg-blue-100 text-blue-700',
   contact: 'bg-zinc-100 text-zinc-600',
@@ -138,7 +129,7 @@ export function LeadDetailPage() {
   }
 
   const currentStatus = lead.status as LeadStatus
-  const notes: Note[] = Array.isArray(lead.notes) ? (lead.notes as Note[]) : []
+  const notes: Note[] = Array.isArray(lead.notes) ? (lead.notes as unknown as Note[]) : []
 
   // ── Status Update Handler ───────────────────────────────────────────────────
 
@@ -157,7 +148,7 @@ export function LeadDetailPage() {
       created_at: new Date().toISOString(),
       user_id: user?.id,
     }
-    const updatedNotes: Json = [...notes, newNote]
+    const updatedNotes = [...notes, newNote] as unknown as Json
     await updateLead.mutateAsync({ id: lead!.id, notes: updatedNotes })
     setNoteText('')
     setIsAddingNote(false)

@@ -12,7 +12,6 @@ import {
   ShieldAlert,
   Inbox,
 } from 'lucide-react'
-import { format } from 'date-fns'
 
 // ── Report Type Badge Colours ────────────────────────────────────────────────
 
@@ -102,7 +101,7 @@ function ReportsContent() {
                       variant="secondary"
                       className={cn(
                         'text-[10px] shrink-0',
-                        reportTypeColours[report.report_type] ?? ''
+                        reportTypeColours[report.report_type ?? 'monthly'] ?? ''
                       )}
                     >
                       {report.report_type}

@@ -19,7 +19,6 @@ import {
 import { PublicLayout } from '@/components/public/public-layout'
 import { useInventoryUnit } from '@/hooks/use-inventory'
 import { useCreateLead } from '@/hooks/use-leads'
-import type { Json } from '@/lib/database.types'
 
 function conditionColour(condition: string | null) {
   switch (condition) {
@@ -185,11 +184,13 @@ export function InventoryDetailPage() {
 
             {/* Request a Quote */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="lg" className="w-full bg-[#D4712A] text-white hover:bg-[#b85d1f] sm:w-auto">
-                  Request a Quote
-                </Button>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <Button size="lg" className="w-full bg-[#D4712A] text-white hover:bg-[#b85d1f] sm:w-auto">
+                    Request a Quote
+                  </Button>
+                }
+              />
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Request a Quote</DialogTitle>

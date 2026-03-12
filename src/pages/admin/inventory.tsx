@@ -27,11 +27,8 @@ import {
   Package,
   Plus,
   Search,
-  Loader2,
   Inbox,
-  Calendar,
   Tag,
-  DollarSign,
   Clock,
   Trash2,
 } from 'lucide-react'
@@ -243,7 +240,8 @@ function DetailDialog({
   const days = daysOnLot(unit.listed_date)
   const margin = unit.price != null && unit.cost != null ? unit.price - unit.cost : null
 
-  async function handleStatusChange(newStatus: string) {
+  async function handleStatusChange(newStatus: string | null) {
+    if (!newStatus) return
     if (!unit) return
     const updates: Record<string, unknown> = { status: newStatus }
     if (newStatus === 'sold') {
@@ -467,7 +465,7 @@ export function InventoryPage() {
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={filters.unit_type ?? ''}
-          onValueChange={(val) => setFilters((prev) => ({ ...prev, unit_type: val || undefined }))}
+          onValueChange={(val) => setFilters((prev) => ({ ...prev, unit_type: (val ?? '') || undefined }))}
         >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Types" />
@@ -482,7 +480,7 @@ export function InventoryPage() {
 
         <Select
           value={filters.make ?? ''}
-          onValueChange={(val) => setFilters((prev) => ({ ...prev, make: val || undefined }))}
+          onValueChange={(val) => setFilters((prev) => ({ ...prev, make: (val ?? '') || undefined }))}
         >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Makes" />
@@ -497,7 +495,7 @@ export function InventoryPage() {
 
         <Select
           value={filters.status ?? ''}
-          onValueChange={(val) => setFilters((prev) => ({ ...prev, status: val || undefined }))}
+          onValueChange={(val) => setFilters((prev) => ({ ...prev, status: (val ?? '') || undefined }))}
         >
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Statuses" />
@@ -512,7 +510,7 @@ export function InventoryPage() {
 
         <Select
           value={filters.condition ?? ''}
-          onValueChange={(val) => setFilters((prev) => ({ ...prev, condition: val || undefined }))}
+          onValueChange={(val) => setFilters((prev) => ({ ...prev, condition: (val ?? '') || undefined }))}
         >
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All Conditions" />

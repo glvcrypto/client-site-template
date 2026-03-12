@@ -7,7 +7,7 @@ export function useServices(filters: { status?: string; service_type?: string } 
     queryKey: ['services', filters],
     queryFn: async () => {
       let query = supabase.from('dealer_services').select('*').order('created_at', { ascending: false })
-      if (filters.status) query = query.eq('status', filters.status)
+      if (filters.status) query = query.eq('status', filters.status as any)
       if (filters.service_type) query = query.eq('service_type', filters.service_type)
       const { data, error } = await query
       if (error) throw error

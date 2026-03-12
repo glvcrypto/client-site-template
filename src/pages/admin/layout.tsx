@@ -26,7 +26,6 @@ import {
   MessageSquare,
   Activity,
   BarChart3,
-  FileText,
   Bell,
   Settings,
   Menu,
@@ -41,8 +40,7 @@ const navItems = [
   { to: '/admin/services', label: 'Services', icon: Wrench },
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/activity', label: 'Activity', icon: Activity },
-  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/admin/reports', label: 'Reports', icon: FileText },
+  { to: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { to: '/admin/updates', label: 'Updates', icon: Bell },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]

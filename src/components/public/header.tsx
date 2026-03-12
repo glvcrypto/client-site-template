@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Phone, Menu, X } from 'lucide-react'
+import { Phone, Menu } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { useSiteConfig } from '@/hooks/use-site-config'
@@ -62,25 +62,30 @@ export function Header() {
 
         {/* Mobile hamburger */}
         <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <Menu className="h-5 w-5 text-[#1B2A4A]" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </SheetTrigger>
+          <SheetTrigger
+            render={
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5 text-[#1B2A4A]" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            }
+          />
           <SheetContent side="left" className="w-72">
             <div className="flex flex-col gap-6 pt-8">
               <span className="text-lg font-bold text-[#1B2A4A]">{businessName}</span>
               <nav className="flex flex-col gap-1">
                 {navLinks.map((link) => (
-                  <SheetClose asChild key={link.to}>
-                    <Link
-                      to={link.to}
-                      className="rounded-md px-3 py-2 text-base font-medium text-[#1B2A4A] transition-colors hover:bg-gray-100 hover:text-[#D4712A]"
-                    >
-                      {link.label}
-                    </Link>
-                  </SheetClose>
+                  <SheetClose
+                    key={link.to}
+                    render={
+                      <Link
+                        to={link.to}
+                        className="rounded-md px-3 py-2 text-base font-medium text-[#1B2A4A] transition-colors hover:bg-gray-100 hover:text-[#D4712A]"
+                      >
+                        {link.label}
+                      </Link>
+                    }
+                  />
                 ))}
               </nav>
               <a

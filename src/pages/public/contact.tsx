@@ -131,7 +131,7 @@ export function ContactPage() {
                 </div>
                 <div>
                   <Label htmlFor="service">Service Needed</Label>
-                  <Select value={form.service} onValueChange={(v) => setForm((p) => ({ ...p, service: v }))}>
+                  <Select value={form.service} onValueChange={(v) => setForm((p) => ({ ...p, service: v ?? '' }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a service..." />
                     </SelectTrigger>

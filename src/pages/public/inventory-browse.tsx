@@ -72,7 +72,7 @@ export function InventoryBrowsePage() {
         <div className="mb-8 flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-gray-600">Category</label>
-            <Select value={unitType} onValueChange={setUnitType}>
+            <Select value={unitType} onValueChange={(v) => setUnitType(v ?? '')}>
               <SelectTrigger>
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
@@ -88,7 +88,7 @@ export function InventoryBrowsePage() {
           </div>
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-gray-600">Condition</label>
-            <Select value={condition} onValueChange={setCondition}>
+            <Select value={condition} onValueChange={(v) => setCondition(v ?? '')}>
               <SelectTrigger>
                 <SelectValue placeholder="All Conditions" />
               </SelectTrigger>
