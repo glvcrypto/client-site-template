@@ -49,6 +49,25 @@ import { useModules, useToggleModule, type ModuleKey } from '@/hooks/use-modules
 import { useLocations, useCreateLocation, useUpdateLocation, useUpdateHours } from '@/hooks/use-locations'
 import { useSiteConfig, useUpdateConfig } from '@/hooks/use-site-config'
 import { useSocialLinks, useUpsertSocialLink } from '@/hooks/use-social-links'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  useNotificationConfig,
+  useUpdateNotificationConfig,
+  useNotificationTemplates,
+  useUpdateTemplate,
+  useNotificationLog,
+  type NotificationConfig,
+  type NotificationTemplate,
+} from '@/hooks/use-notifications'
+import {
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Send,
+} from 'lucide-react'
 
 // ── Role Badge Colours ───────────────────────────────────────────────────────
 
@@ -689,37 +708,316 @@ function IntegrationsTab() {
   )
 }
 
+// ── Event Type Labels ────────────────────────────────────────────────────────
+
+const EVENT_LABELS: Record<string, string> = {
+  new_lead: 'New Lead',
+  new_order: 'New Order',
+  new_booking: 'New Booking',
+  new_review: 'New Review',
+  low_stock: 'Low Stock Alert',
+  new_message: 'New Message',
+  service_complete: 'Service Complete',
+  order_status_change: 'Order Status Change',
+  booking_confirmed: 'Booking Confirmed',
+  review_request: 'Review Request',
+}
+
+const PLACEHOLDER_REF: Record<string, string[]> = {
+  new_lead: ['lead_name', 'lead_email', 'lead_phone', 'lead_source', 'lead_message'],
+  new_order: ['order_number', 'customer_name', 'customer_email', 'order_total', 'item_count'],
+  new_booking: ['service_name', 'customer_name', 'customer_email', 'booking_date', 'booking_time'],
+  new_review: ['reviewer_name', 'rating', 'review_text'],
+  low_stock: ['product_name', 'product_sku', 'stock_count'],
+  new_message: ['sender_name', 'sender_email', 'message_subject', 'message_body'],
+  service_complete: ['customer_name', 'service_name'],
+  order_status_change: ['customer_name', 'order_number', 'new_status', 'status_message'],
+  booking_confirmed: ['customer_name', 'service_name', 'booking_date', 'booking_time', 'location'],
+  review_request: ['customer_name', 'review_url'],
+}
+
 // ── Notifications Tab ────────────────────────────────────────────────────────
 
 function NotificationsTab() {
+  const { role } = useAuth()
+  const isAdmin = role === 'admin'
+  const { data: configs, isLoading: configLoading } = useNotificationConfig()
+  const { data: templates, isLoading: templateLoading } = useNotificationTemplates()
+  const { data: logs, isLoading: logLoading } = useNotificationLog(50)
+  const updateConfig = useUpdateNotificationConfig()
+  const updateTemplate = useUpdateTemplate()
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [editSubject, setEditSubject] = useState('')
+  const [editBody, setEditBody] = useState('')
+
+  function toggleExpand(eventType: string) {
+    if (expanded === eventType) {
+      setExpanded(null)
+    } else {
+      setExpanded(eventType)
+      const tpl = templates?.find((t) => t.event_type === eventType)
+      if (tpl) {
+        setEditSubject(tpl.subject)
+        setEditBody(tpl.body_html)
+      }
+    }
+  }
+
+  function saveTemplate(tpl: NotificationTemplate) {
+    updateTemplate.mutate(
+      { id: tpl.id, subject: editSubject, body_html: editBody },
+      {
+        onSuccess: () => toast.success('Template saved'),
+        onError: (e) => toast.error(e.message),
+      }
+    )
+  }
+
+  function handleTestWebhook(config: NotificationConfig) {
+    if (!config.webhook_url) {
+      toast.error('No webhook URL configured')
+      return
+    }
+    fetch(config.webhook_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...config.webhook_headers_json },
+      body: JSON.stringify({ test: true, event_type: config.event_type, timestamp: new Date().toISOString() }),
+    })
+      .then((r) => {
+        if (r.ok) toast.success(`Webhook test sent (${r.status})`)
+        else toast.error(`Webhook test failed (${r.status})`)
+      })
+      .catch((e) => toast.error(`Webhook test error: ${e.message}`))
+  }
+
+  if (configLoading || templateLoading) {
+    return (
+      <Card>
+        <CardContent className="py-12 flex justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
-          <Bell className="h-4 w-4" />
-          Notification Preferences
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">
-          Notification preferences coming soon.
-        </p>
-        <div className="space-y-3 opacity-50 pointer-events-none">
-          <label className="flex items-center gap-2.5 text-sm">
-            <input type="checkbox" disabled className="h-4 w-4 rounded border-border" />
-            Email me when a new lead comes in
-          </label>
-          <label className="flex items-center gap-2.5 text-sm">
-            <input type="checkbox" disabled className="h-4 w-4 rounded border-border" />
-            Email me when a new message arrives
-          </label>
-          <label className="flex items-center gap-2.5 text-sm">
-            <input type="checkbox" disabled className="h-4 w-4 rounded border-border" />
-            Daily activity digest
-          </label>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      {/* ── Event Config List ─────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            Notification Events
+          </CardTitle>
+          <CardDescription>Configure email and webhook delivery for each event type.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {configs?.map((cfg) => {
+            const tpl = templates?.find((t) => t.event_type === cfg.event_type)
+            const isExpanded = expanded === cfg.event_type
+            return (
+              <div key={cfg.id} className="border rounded-lg">
+                {/* Event row */}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <button
+                    onClick={() => toggleExpand(cfg.event_type)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                  <span className="text-sm font-medium flex-1">
+                    {EVENT_LABELS[cfg.event_type] ?? cfg.event_type}
+                  </span>
+                  {tpl?.is_customer_facing && (
+                    <Badge variant="outline" className="text-xs">Customer-facing</Badge>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Switch
+                      checked={cfg.email_enabled}
+                      onCheckedChange={(checked) =>
+                        updateConfig.mutate({ id: cfg.id, email_enabled: checked })
+                      }
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Input
+                      placeholder="Override email"
+                      value={cfg.email_to ?? ''}
+                      onChange={(e) =>
+                        updateConfig.mutate({ id: cfg.id, email_to: e.target.value || null })
+                      }
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  {isAdmin && (
+                    <>
+                      <div className="flex items-center gap-2 ml-2">
+                        <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Switch
+                          checked={cfg.webhook_enabled}
+                          onCheckedChange={(checked) =>
+                            updateConfig.mutate({ id: cfg.id, webhook_enabled: checked })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Expanded section */}
+                {isExpanded && (
+                  <div className="border-t px-4 py-4 space-y-4 bg-muted/30">
+                    {/* Webhook URL (admin only) */}
+                    {isAdmin && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-medium">Webhook URL</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="https://..."
+                            value={cfg.webhook_url ?? ''}
+                            onChange={(e) =>
+                              updateConfig.mutate({ id: cfg.id, webhook_url: e.target.value || null })
+                            }
+                            className="flex-1 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleTestWebhook(cfg)}
+                            disabled={!cfg.webhook_url}
+                          >
+                            <Send className="h-3.5 w-3.5 mr-1" />
+                            Test
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Template editor */}
+                    {tpl && (
+                      <div className="space-y-3">
+                        <Label className="text-xs font-medium">Email Template</Label>
+                        <div className="space-y-2">
+                          <Input
+                            value={editSubject}
+                            onChange={(e) => setEditSubject(e.target.value)}
+                            placeholder="Subject"
+                            className="text-sm"
+                          />
+                          <Textarea
+                            value={editBody}
+                            onChange={(e) => setEditBody(e.target.value)}
+                            placeholder="Body HTML"
+                            rows={6}
+                            className="text-sm font-mono"
+                          />
+                        </div>
+
+                        {/* Placeholder reference */}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Available placeholders: </span>
+                          {(PLACEHOLDER_REF[cfg.event_type] ?? []).map((p) => (
+                            <code key={p} className="mx-0.5 px-1 py-0.5 bg-muted rounded text-[11px]">
+                              {'{{' + p + '}}'}
+                            </code>
+                          ))}
+                        </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => saveTemplate(tpl)}
+                          disabled={updateTemplate.isPending}
+                        >
+                          {updateTemplate.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          ) : (
+                            <Save className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Save Template
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+
+      {/* ── Notification Log (admin only) ─────────────────────────────── */}
+      {isAdmin && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold inline-flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Notification Log
+            </CardTitle>
+            <CardDescription>Last 50 notification delivery attempts.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {logLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : !logs?.length ? (
+              <p className="text-sm text-muted-foreground py-4">No notifications sent yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 pr-3 font-medium">Event</th>
+                      <th className="pb-2 pr-3 font-medium">Channel</th>
+                      <th className="pb-2 pr-3 font-medium">Recipient</th>
+                      <th className="pb-2 pr-3 font-medium">Status</th>
+                      <th className="pb-2 pr-3 font-medium">Time</th>
+                      <th className="pb-2 font-medium">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => (
+                      <tr key={log.id} className="border-b last:border-0">
+                        <td className="py-2 pr-3">{EVENT_LABELS[log.event_type] ?? log.event_type}</td>
+                        <td className="py-2 pr-3">
+                          <Badge variant="outline" className="text-xs">
+                            {log.channel === 'email' ? <Mail className="h-3 w-3 mr-1" /> : <Globe className="h-3 w-3 mr-1" />}
+                            {log.channel}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-3 text-xs text-muted-foreground max-w-[200px] truncate">
+                          {log.recipient}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {log.status === 'sent' ? (
+                            <Badge className="bg-green-100 text-green-700 text-xs">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Sent
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-700 text-xs">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Failed
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(log.sent_at).toLocaleString()}
+                        </td>
+                        <td className="py-2 text-xs text-red-600 max-w-[200px] truncate">
+                          {log.error_message}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
 
