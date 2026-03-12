@@ -6,6 +6,10 @@ import { useLeads } from '@/hooks/use-leads'
 import { useInventory } from '@/hooks/use-inventory'
 import { useServices } from '@/hooks/use-services'
 import { useStaff, useStaffMap } from '@/hooks/use-staff'
+import { useModuleEnabled } from '@/hooks/use-modules'
+import { useTrafficSources, useDeviceBreakdown, useTopPages, useTrafficTrend } from '@/hooks/use-analytics'
+import type { DateRange } from '@/hooks/use-analytics'
+import { useAdSummary, useAdPlatformBreakdown, useTopCampaigns } from '@/hooks/use-ad-performance'
 import { cn } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +39,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
   Area,
   AreaChart,
@@ -63,10 +68,16 @@ import {
   ArrowDownRight,
   BookOpen,
   Hash,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Megaphone,
+  Zap,
 } from 'lucide-react'
 import {
   format,
   subDays,
+  subYears,
   eachDayOfInterval,
   eachWeekOfInterval,
   isWithinInterval,
@@ -120,6 +131,42 @@ function getDateRange(period: Period) {
   }
 }
 
+/** Convert period to DateRange for analytics hooks */
+function toDateRange(period: Period): DateRange {
+  const { start, end } = getDateRange(period)
+  return {
+    from: format(start, 'yyyy-MM-dd'),
+    to: format(end, 'yyyy-MM-dd'),
+  }
+}
+
+/** Get the YoY comparison DateRange (same length, one year earlier) */
+function toYoyDateRange(period: Period): DateRange {
+  const { start, end } = getDateRange(period)
+  return {
+    from: format(subYears(start, 1), 'yyyy-MM-dd'),
+    to: format(subYears(end, 1), 'yyyy-MM-dd'),
+  }
+}
+
+const PLATFORM_COLOURS: Record<string, string> = {
+  google_ads: '#4285f4',
+  meta: '#1877f2',
+  tiktok: '#000000',
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  google_ads: 'Google Ads',
+  meta: 'Meta',
+  tiktok: 'TikTok',
+}
+
+const DEVICE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  desktop: Monitor,
+  mobile: Smartphone,
+  tablet: Tablet,
+}
+
 // ── GA4 / GSC JSON shapes ────────────────────────────────────────────────────
 
 interface GA4Data {
@@ -165,8 +212,10 @@ export function ReportsPage() {
 
 function ReportsContent() {
   const [period, setPeriod] = useState<Period>('30d')
-  const [activeTab, setActiveTab] = useState(0)
+  const [activeTab, setActiveTab] = useState('overview')
   const { start, end } = getDateRange(period)
+  const adsEnabled = useModuleEnabled('ads')
+  const dateRange = toDateRange(period)
 
   const { data: allLeads, isLoading: leadsLoading } = useLeads()
   const { data: allInventory, isLoading: invLoading } = useInventory()
@@ -278,31 +327,45 @@ function ReportsContent() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any as number)}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value={0}>Overview</TabsTrigger>
-          <TabsTrigger value={1}>Website & SEO</TabsTrigger>
-          <TabsTrigger value={2}>Staff</TabsTrigger>
-          <TabsTrigger value={3}>Documents</TabsTrigger>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="website">Website & SEO</TabsTrigger>
+          <TabsTrigger value="traffic">Traffic</TabsTrigger>
+          {adsEnabled && <TabsTrigger value="ads">Ads</TabsTrigger>}
+          <TabsTrigger value="staff">Staff</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
-        {/* ═══ TAB 0: OVERVIEW ═══ */}
-        <TabsContent value={0}>
+        {/* ═══ TAB: OVERVIEW ═══ */}
+        <TabsContent value="overview">
           <OverviewTab leads={leads} inventory={inventory} services={services} period={period} start={start} end={end} staffMap={staffMap} latestSnapshot={snapshots?.[snapshots.length - 1] ?? null} />
         </TabsContent>
 
-        {/* ═══ TAB 1: WEBSITE & SEO ═══ */}
-        <TabsContent value={1}>
+        {/* ═══ TAB: WEBSITE & SEO ═══ */}
+        <TabsContent value="website">
           <WebsiteSeoTab snapshots={snapshots ?? []} keywords={keywords ?? []} blogPosts={blogPosts ?? []} leadsCount={leads.length} />
         </TabsContent>
 
-        {/* ═══ TAB 2: STAFF ═══ */}
-        <TabsContent value={2}>
+        {/* ═══ TAB: TRAFFIC ═══ */}
+        <TabsContent value="traffic">
+          <TrafficTab dateRange={dateRange} period={period} />
+        </TabsContent>
+
+        {/* ═══ TAB: ADS (module-gated) ═══ */}
+        {adsEnabled && (
+          <TabsContent value="ads">
+            <AdsTab dateRange={dateRange} period={period} />
+          </TabsContent>
+        )}
+
+        {/* ═══ TAB: STAFF ═══ */}
+        <TabsContent value="staff">
           <StaffTab allLeads={allLeads ?? []} staff={staff ?? []} staffMap={staffMap} />
         </TabsContent>
 
-        {/* ═══ TAB 3: DOCUMENTS ═══ */}
-        <TabsContent value={3}>
+        {/* ═══ TAB: DOCUMENTS ═══ */}
+        <TabsContent value="documents">
           <DocumentsTab reports={reports ?? []} />
         </TabsContent>
       </Tabs>
@@ -1075,6 +1138,462 @@ function DocumentsTab({ reports }: { reports: any[] }) {
         )
       })}
     </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: TRAFFIC
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function TrafficTab({ dateRange, period }: { dateRange: DateRange; period: Period }) {
+  const { data: sources } = useTrafficSources(dateRange)
+  const { data: devices } = useDeviceBreakdown(dateRange)
+  const { data: pages } = useTopPages(dateRange)
+  const { data: trend } = useTrafficTrend(dateRange)
+
+  // YoY comparison
+  const yoyRange = toYoyDateRange(period)
+  const { data: yoySources } = useTrafficSources(yoyRange)
+  const { data: yoyTrend } = useTrafficTrend(yoyRange)
+
+  const hasYoyData = (yoySources?.length ?? 0) > 0
+  const hasData = (sources?.length ?? 0) > 0
+
+  // Aggregate sources for pie chart
+  const sourcePieData = useMemo(() => {
+    if (!sources || sources.length === 0) return []
+    const bySource: Record<string, number> = {}
+    for (const s of sources) {
+      const key = s.source ?? 'unknown'
+      bySource[key] = (bySource[key] ?? 0) + (s.sessions ?? 0)
+    }
+    return Object.entries(bySource)
+      .map(([name, sessions], i) => ({ name: formatEnumLabel(name), sessions, fill: CHART_COLOURS[i % CHART_COLOURS.length] }))
+      .sort((a, b) => b.sessions - a.sessions)
+  }, [sources])
+
+  // Aggregate sources for table
+  const sourceTableData = useMemo(() => {
+    if (!sources || sources.length === 0) return []
+    const byKey: Record<string, { source: string; sessions: number; users: number; bounceRateSum: number; count: number }> = {}
+    for (const s of sources) {
+      const key = `${s.source}/${s.medium}`
+      if (!byKey[key]) byKey[key] = { source: key, sessions: 0, users: 0, bounceRateSum: 0, count: 0 }
+      byKey[key].sessions += s.sessions ?? 0
+      byKey[key].users += s.users ?? 0
+      byKey[key].bounceRateSum += s.bounce_rate ?? 0
+      byKey[key].count++
+    }
+    return Object.values(byKey)
+      .map((d) => ({ ...d, bounceRate: d.count > 0 ? parseFloat((d.bounceRateSum / d.count).toFixed(1)) : 0 }))
+      .sort((a, b) => b.sessions - a.sessions)
+  }, [sources])
+
+  // Device donut data
+  const deviceData = useMemo(() => {
+    if (!devices || devices.length === 0) return []
+    const byType: Record<string, { sessions: number; percentage: number }> = {}
+    for (const d of devices) {
+      const key = d.device_type ?? 'unknown'
+      if (!byType[key]) byType[key] = { sessions: 0, percentage: 0 }
+      byType[key].sessions += d.sessions ?? 0
+      byType[key].percentage += d.percentage ?? 0
+    }
+    const colours: Record<string, string> = { desktop: '#3b82f6', mobile: '#10b981', tablet: '#f59e0b' }
+    return Object.entries(byType).map(([type, d]) => ({
+      name: formatEnumLabel(type),
+      type,
+      sessions: d.sessions,
+      percentage: parseFloat(d.percentage.toFixed(1)),
+      fill: colours[type] ?? '#6b7280',
+    }))
+  }, [devices])
+
+  // YoY session totals for comparison
+  const currentTotal = useMemo(() => trend?.reduce((s, t) => s + t.sessions, 0) ?? 0, [trend])
+  const yoyTotal = useMemo(() => yoyTrend?.reduce((s, t) => s + t.sessions, 0) ?? 0, [yoyTrend])
+  const yoyChange = yoyTotal > 0 ? Math.round(((currentTotal - yoyTotal) / yoyTotal) * 100) : null
+
+  if (!hasData) {
+    return (
+      <div className="mt-4 flex flex-col items-center justify-center py-20 text-center">
+        <Globe className="h-10 w-10 text-muted-foreground/30" />
+        <p className="mt-3 text-sm font-medium">No traffic data yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Data will appear here once analytics sync Edge Functions populate the tables.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-4 space-y-6">
+      {/* YoY banner */}
+      {!hasYoyData && period !== 'all' && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          Insufficient data for YoY comparison — needs 12+ months of data.
+        </div>
+      )}
+
+      {/* Session trend with optional YoY overlay */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Sessions Over Time</CardTitle>
+            {hasYoyData && yoyChange !== null && (
+              <Badge variant="secondary" className={cn('text-[11px]', yoyChange >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700')}>
+                {yoyChange >= 0 ? '+' : ''}{yoyChange}% YoY
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={trend ?? []}>
+              <defs>
+                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#a1a1aa" />
+              <YAxis tick={{ fontSize: 11 }} stroke="#a1a1aa" allowDecimals={false} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }} />
+              <Area type="monotone" dataKey="sessions" stroke="#3b82f6" strokeWidth={2} fill="url(#trendFill)" name="Sessions" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Traffic sources pie */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Traffic Sources</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <PieChart>
+                <Pie data={sourcePieData} cx="50%" cy="50%" outerRadius={90} dataKey="sessions" label={({ name, sessions }) => `${name} (${sessions})`}>
+                  {sourcePieData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Device breakdown donut */}
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base font-semibold">Device Breakdown</CardTitle></CardHeader>
+          <CardContent>
+            {deviceData.length === 0 ? <EmptyChart /> : (
+              <div className="flex items-center gap-6">
+                <ResponsiveContainer width="50%" height={220}>
+                  <PieChart>
+                    <Pie data={deviceData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="sessions" labelLine={false}>
+                      {deviceData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {deviceData.map((d) => {
+                    const DeviceIcon = DEVICE_ICONS[d.type] ?? Monitor
+                    return (
+                      <div key={d.type} className="flex items-center gap-2 text-sm">
+                        <div className="rounded p-1" style={{ backgroundColor: `${d.fill}15` }}>
+                          <DeviceIcon className="h-4 w-4" style={{ color: d.fill }} />
+                        </div>
+                        <div>
+                          <p className="font-medium">{d.name}</p>
+                          <p className="text-xs text-muted-foreground">{d.percentage}% — {d.sessions} sessions</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Traffic sources table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold">Traffic Sources Detail</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-2 pr-4 font-medium">Source / Medium</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Sessions</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Users</th>
+                  <th className="pb-2 font-medium text-right">Bounce Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sourceTableData.map((row) => (
+                  <tr key={row.source} className="border-b last:border-0">
+                    <td className="py-2 pr-4 font-medium">{row.source}</td>
+                    <td className="py-2 pr-4 text-right">{row.sessions.toLocaleString()}</td>
+                    <td className="py-2 pr-4 text-right">{row.users.toLocaleString()}</td>
+                    <td className="py-2 text-right">
+                      <Badge variant="secondary" className={cn('text-[11px]',
+                        row.bounceRate < 30 ? 'bg-green-100 text-green-700' :
+                        row.bounceRate < 50 ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      )}>
+                        {row.bounceRate}%
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Top pages */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Top Pages</CardTitle>
+            <Badge variant="secondary" className="text-[11px]">{pages?.length ?? 0} pages</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {(!pages || pages.length === 0) ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No page data yet</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Path</th>
+                    <th className="pb-2 pr-4 font-medium">Title</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Pageviews</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Avg Time</th>
+                    <th className="pb-2 font-medium text-right">Bounce Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pages.map((p) => (
+                    <tr key={p.id} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{p.page_path}</td>
+                      <td className="py-2 pr-4 font-medium">{p.page_title ?? '--'}</td>
+                      <td className="py-2 pr-4 text-right font-medium">{(p.pageviews ?? 0).toLocaleString()}</td>
+                      <td className="py-2 pr-4 text-right">
+                        {p.avg_time_on_page ? `${Math.round(Number(p.avg_time_on_page))}s` : '--'}
+                      </td>
+                      <td className="py-2 text-right">
+                        {p.bounce_rate != null ? (
+                          <Badge variant="secondary" className={cn('text-[11px]',
+                            Number(p.bounce_rate) < 30 ? 'bg-green-100 text-green-700' :
+                            Number(p.bounce_rate) < 50 ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          )}>
+                            {p.bounce_rate}%
+                          </Badge>
+                        ) : '--'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: ADS (module-gated)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function AdsTab({ dateRange, period }: { dateRange: DateRange; period: Period }) {
+  const { data: summary } = useAdSummary(dateRange)
+  const { data: platformBreakdown } = useAdPlatformBreakdown(dateRange)
+  const { data: campaigns } = useTopCampaigns(dateRange, 'roas', 20)
+
+  // YoY
+  const yoyRange = toYoyDateRange(period)
+  const { data: yoySummary } = useAdSummary(yoyRange)
+  const hasYoyData = yoySummary !== null
+
+  const hasData = summary !== null
+
+  if (!hasData) {
+    return (
+      <div className="mt-4 flex flex-col items-center justify-center py-20 text-center">
+        <Megaphone className="h-10 w-10 text-muted-foreground/30" />
+        <p className="mt-3 text-sm font-medium">No ad performance data yet</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Data will appear here once ad platform sync Edge Functions populate the tables.
+        </p>
+      </div>
+    )
+  }
+
+  const yoySpendChange = hasYoyData && yoySummary.totalSpend > 0
+    ? Math.round(((summary.totalSpend - yoySummary.totalSpend) / yoySummary.totalSpend) * 100)
+    : null
+  const yoyConvChange = hasYoyData && yoySummary.totalConversions > 0
+    ? Math.round(((summary.totalConversions - yoySummary.totalConversions) / yoySummary.totalConversions) * 100)
+    : null
+  const yoyRoasChange = hasYoyData && yoySummary.avgRoas > 0
+    ? Math.round(((summary.avgRoas - yoySummary.avgRoas) / yoySummary.avgRoas) * 100)
+    : null
+  const yoyCpcChange = hasYoyData && yoySummary.avgCpc > 0
+    ? Math.round(((summary.avgCpc - yoySummary.avgCpc) / yoySummary.avgCpc) * 100)
+    : null
+
+  return (
+    <div className="mt-4 space-y-6">
+      {/* YoY banner */}
+      {!hasYoyData && period !== 'all' && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          Insufficient data for YoY comparison — needs 12+ months of data.
+        </div>
+      )}
+
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <AdKpiCard label="Total Spend" value={`$${summary.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} icon={DollarSign} yoyChange={yoySpendChange} invertTrend />
+        <AdKpiCard label="Conversions" value={summary.totalConversions.toLocaleString()} icon={Target} yoyChange={yoyConvChange} />
+        <AdKpiCard label="Avg ROAS" value={`${summary.avgRoas}x`} icon={TrendingUp} yoyChange={yoyRoasChange} />
+        <AdKpiCard label="Avg CPC" value={`$${summary.avgCpc.toFixed(2)}`} icon={MousePointerClick} yoyChange={yoyCpcChange} invertTrend />
+      </div>
+
+      {/* Platform Breakdown */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {(platformBreakdown ?? []).map((p) => (
+          <Card key={p.platform}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="rounded-md p-1.5" style={{ backgroundColor: `${PLATFORM_COLOURS[p.platform] ?? '#6b7280'}15` }}>
+                  <Zap className="h-4 w-4" style={{ color: PLATFORM_COLOURS[p.platform] ?? '#6b7280' }} />
+                </div>
+                <span className="font-semibold">{PLATFORM_LABELS[p.platform] ?? p.platform}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-y-2 text-sm">
+                <div><p className="text-xs text-muted-foreground">Spend</p><p className="font-bold">${p.spend.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div>
+                <div><p className="text-xs text-muted-foreground">Clicks</p><p className="font-bold">{p.clicks.toLocaleString()}</p></div>
+                <div><p className="text-xs text-muted-foreground">Conversions</p><p className="font-bold">{p.conversions.toLocaleString()}</p></div>
+                <div><p className="text-xs text-muted-foreground">ROAS</p><p className="font-bold">{p.roas}x</p></div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Campaign Table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Campaigns</CardTitle>
+            <Badge variant="secondary" className="text-[11px]">{campaigns?.length ?? 0} campaigns</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {(!campaigns || campaigns.length === 0) ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No campaign data yet</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Campaign</th>
+                    <th className="pb-2 pr-4 font-medium">Platform</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Spend</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Impr.</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Clicks</th>
+                    <th className="pb-2 pr-4 font-medium text-right">CTR</th>
+                    <th className="pb-2 pr-4 font-medium text-right">Conv.</th>
+                    <th className="pb-2 pr-4 font-medium text-right">ROAS</th>
+                    <th className="pb-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {campaigns.map((c, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-medium">{c.campaignName}</td>
+                      <td className="py-2 pr-4">
+                        <Badge variant="secondary" className="text-[10px]" style={{
+                          backgroundColor: `${PLATFORM_COLOURS[c.platform] ?? '#6b7280'}15`,
+                          color: PLATFORM_COLOURS[c.platform] ?? '#6b7280',
+                        }}>
+                          {PLATFORM_LABELS[c.platform] ?? c.platform}
+                        </Badge>
+                      </td>
+                      <td className="py-2 pr-4 text-right">${c.spend.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="py-2 pr-4 text-right">{c.impressions.toLocaleString()}</td>
+                      <td className="py-2 pr-4 text-right">{c.clicks.toLocaleString()}</td>
+                      <td className="py-2 pr-4 text-right">{c.ctr}%</td>
+                      <td className="py-2 pr-4 text-right font-medium">{c.conversions}</td>
+                      <td className="py-2 pr-4 text-right">
+                        <Badge variant="secondary" className={cn('text-[11px]',
+                          c.roas >= 4 ? 'bg-green-100 text-green-700' :
+                          c.roas >= 2 ? 'bg-blue-100 text-blue-700' :
+                          c.roas >= 1 ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        )}>
+                          {c.roas}x
+                        </Badge>
+                      </td>
+                      <td className="py-2">
+                        <Badge variant="secondary" className={cn('text-[11px]',
+                          c.status === 'active' ? 'bg-green-100 text-green-700' :
+                          c.status === 'paused' ? 'bg-amber-100 text-amber-700' :
+                          'bg-zinc-100 text-zinc-600'
+                        )}>
+                          {formatEnumLabel(c.status)}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function AdKpiCard({ label, value, icon: Icon, yoyChange, invertTrend }: {
+  label: string; value: string; icon: React.ComponentType<{ className?: string }>
+  yoyChange?: number | null; invertTrend?: boolean
+}) {
+  let trendColour = 'text-muted-foreground'
+  if (yoyChange != null && yoyChange !== 0) {
+    const isGood = invertTrend ? yoyChange < 0 : yoyChange > 0
+    trendColour = isGood ? 'text-green-600' : 'text-red-600'
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-[11px] text-muted-foreground font-medium">{label}</span>
+        </div>
+        <div className="mt-1.5 flex items-end gap-1.5">
+          <span className="text-xl font-bold tracking-tight">{value}</span>
+          {yoyChange != null && yoyChange !== 0 && (
+            <span className={cn('text-[11px] font-medium mb-0.5', trendColour)}>
+              {yoyChange > 0 ? '+' : ''}{yoyChange}% YoY
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
